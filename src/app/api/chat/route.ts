@@ -147,7 +147,7 @@ export async function POST(req: Request) {
 
     // 5. STREAM & SAVE AI RESPONSE
     const result = await streamText({
-      model: google('gemini-3.6-flash'), 
+      model: google('gemini-1.5-flash'), 
       messages,
       system: systemPrompt,
       onFinish: async ({ text }) => {

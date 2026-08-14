@@ -258,7 +258,7 @@ export default function Chat() {
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden flex-col">
       
       {/* --- PERSISTENT TOP HEADER BAR --- */}
-      <header className="bg-slate-900 text-white h-16 shrink-0 shadow-md flex items-center justify-between px-4 sm:px-6 z-30">
+      <header className="bg-slate-900 text-white h-16 shrink-0 shadow-md flex items-center px-4 sm:px-6 z-30">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => setIsSidebarOpen(true)} 
@@ -270,52 +270,12 @@ export default function Chat() {
           </button>
           <div className="flex items-center gap-2 select-none">
             <span className="text-xl">🏗️</span>
-            <h1 className="text-lg font-bold tracking-wide hidden sm:block">Civil<span className="text-amber-500">GPT</span></h1>
+            <h1 className="text-lg font-bold tracking-wide">Civil<span className="text-amber-500">GPT</span></h1>
           </div>
-        </div>
-
-        {/* --- ANIMATED TOOL MENU --- */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          
-          <div className="relative group">
-            <button onClick={handleNewChat} className="p-2.5 rounded-xl hover:bg-slate-800 transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-amber-500">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-            </button>
-            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 bg-slate-800 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-xl whitespace-nowrap border border-slate-700">
-              New Chat
-            </span>
-          </div>
-
-          <div className="w-px h-6 bg-slate-700 mx-1"></div>
-
-          <div className="relative group">
-            <button onClick={() => setActiveTab('chat')} className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center ${activeTab === 'chat' ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-slate-800 text-slate-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-              </svg>
-            </button>
-            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 bg-slate-800 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-xl whitespace-nowrap border border-slate-700">
-              AI Assistant
-            </span>
-          </div>
-          
-          <div className="relative group">
-            <button onClick={() => setActiveTab('calculator')} className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center ${activeTab === 'calculator' ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-slate-800 text-slate-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V13.5Zm0 2.25h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V18Zm2.502-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm-9.75-9.75h14.25v-.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v.75Zm0 0H19.5m-13.5 0v11.25c0 1.242 1.008 2.25 2.25 2.25h11.25c1.242 0 2.25-2.25V6m-13.5 0h13.5" />
-              </svg>
-            </button>
-            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 bg-slate-800 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-xl whitespace-nowrap border border-slate-700">
-              Mix Calculator
-            </span>
-          </div>
-
         </div>
       </header>
 
-      {/* --- HIDDEN CHAT HISTORY DRAWER --- */}
+      {/* --- HIDDEN ANIMATED DRAWER --- */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity" 
@@ -324,16 +284,60 @@ export default function Chat() {
       )}
 
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 shadow-2xl flex flex-col transform transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        
+        {/* Drawer Header */}
         <div className="p-5 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/50">
-          <h2 className="text-sm font-bold text-slate-300 tracking-wider uppercase">Chat History</h2>
+          <div className="flex items-center gap-2 select-none">
+            <span className="text-xl">🏗️</span>
+            <h1 className="text-lg font-bold tracking-wide text-white">Civil<span className="text-amber-500">GPT</span></h1>
+          </div>
           <button className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" onClick={() => setIsSidebarOpen(false)}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
+
+        {/* Animated Tools Section */}
+        <div className={`p-4 space-y-2 border-b border-slate-800/80 transition-all duration-500 delay-100 ${isSidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}>
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Tools</h3>
+          
+          <button 
+            onClick={handleNewChat}
+            className="w-full text-left text-sm py-3 px-4 mb-2 rounded-xl transition-all flex items-center gap-3 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 group"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Chat
+          </button>
+
+          <button 
+            onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }}
+            className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-all flex items-center gap-3 group ${activeTab === 'chat' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform duration-300">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+            </svg>
+            AI Assistant
+          </button>
+          
+          <button 
+            onClick={() => { setActiveTab('calculator'); setIsSidebarOpen(false); }}
+            className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-all flex items-center gap-3 group ${activeTab === 'calculator' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform duration-300">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V13.5Zm0 2.25h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V18Zm2.502-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm-9.75-9.75h14.25v-.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v.75Zm0 0H19.5m-13.5 0v11.25c0 1.242 1.008 2.25 2.25 2.25h11.25c1.242 0 2.25-2.25V6m-13.5 0h13.5" />
+            </svg>
+            Mix Calculator
+          </button>
+        </div>
         
-        <div className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {/* Animated History Section */}
+        <div className={`flex-1 p-3 space-y-1 overflow-y-auto transition-all duration-500 delay-200 ${isSidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}>
+          <div className="px-2 pt-2 pb-1">
+             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Chat History</h3>
+          </div>
           {sessions.length === 0 ? (
              <div className="text-slate-500 text-sm text-center mt-10 p-4">No previous chats found.</div>
           ) : (
@@ -352,7 +356,7 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-800/80 bg-slate-900/50">
+        <div className={`p-4 border-t border-slate-800/80 bg-slate-900/50 transition-all duration-500 delay-300 ${isSidebarOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <button onClick={handleLogout} className="w-full py-2.5 px-3 text-sm text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
@@ -423,7 +427,6 @@ export default function Chat() {
 
         {activeTab === 'calculator' && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 w-full max-w-5xl mx-auto">
-            {/* ... Calculator UI remains the same ... */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
               <div className="border-b border-slate-200 pb-5 mb-8">
                 <h2 className="text-2xl font-bold text-slate-900">Concrete Mix Design Calculator</h2>

@@ -13,51 +13,47 @@ type Message = { id: string; role: 'user' | 'assistant'; content: string };
 type Session = { id: string; title: string; created_at: string };
 type UploadStatus = { type: 'success' | 'error'; message: string } | null;
 
+// --- GEMINI-STYLE CHAT BUBBLES ---
 const MessageBubble = memo(({ m, isTyping }: { m: Message; isTyping?: boolean }) => {
+  if (m.role === 'user') {
+    return (
+      <div className="flex justify-end mb-8">
+        <div className="bg-[#f0f4f9] text-slate-800 px-6 py-3.5 rounded-[24px] rounded-br-sm max-w-[85%] md:max-w-[70%] text-[15px] leading-relaxed shadow-sm">
+          <div className="whitespace-pre-wrap">{m.content}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[85%] rounded-2xl px-5 py-4 shadow-sm ${
-          m.role === 'user' 
-            ? 'bg-amber-500 text-white rounded-br-none' 
-            : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none overflow-x-auto'
-        }`}
-      >
-        <div className="font-semibold text-xs mb-1 opacity-75">
-          {m.role === 'user' ? 'You' : 'CivilGPT'}
-        </div>
-        
-        <div className={`leading-relaxed text-sm sm:text-base ${isTyping ? 'typing-cursor' : ''}`}>
-          {m.role === 'user' ? (
-            <div className="whitespace-pre-wrap">{m.content}</div>
-          ) : (
-            <ReactMarkdown
-              remarkPlugins={[remarkMath, remarkGfm]}
-              rehypePlugins={[rehypeKatex]}
-              components={{
-                h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-4 text-slate-900 border-b border-slate-200 pb-2" {...props} />,
-                h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-6 mb-3 text-slate-900" {...props} />,
-                h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-5 mb-3 text-slate-900" {...props} />,
-                p: ({node, ...props}) => <p className="mb-4 leading-relaxed" {...props} />,
-                ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-6 space-y-2" {...props} />,
-                ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-6 space-y-2" {...props} />,
-                li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
-                strong: ({node, ...props}) => <strong className="font-semibold text-amber-700" {...props} />,
-                hr: ({node, ...props}) => <hr className="my-6 border-slate-300" {...props} />,
-                table: ({node, ...props}) => (
-                  <div className="overflow-x-auto my-6">
-                    <table className="w-full text-left border-collapse min-w-full" {...props} />
-                  </div>
-                ),
-                thead: ({node, ...props}) => <thead className="bg-slate-100 border-b-2 border-slate-300" {...props} />,
-                th: ({node, ...props}) => <th className="py-3 px-4 font-semibold text-slate-800 border-r last:border-r-0 border-slate-200 whitespace-nowrap" {...props} />,
-                td: ({node, ...props}) => <td className="py-3 px-4 border-b border-r last:border-r-0 border-slate-200" {...props} />,
-                tbody: ({node, ...props}) => <tbody className="divide-y divide-slate-200" {...props} />,
-              }}
-            >
-              {m.content}
-            </ReactMarkdown>
-          )}
-        </div>
+    <div className="flex justify-start gap-4 mb-8">
+      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-lg shrink-0 mt-1 shadow-sm border border-amber-200">
+        🏗️
+      </div>
+      <div className={`flex-1 max-w-[90%] md:max-w-[80%] text-[15px] text-slate-800 leading-relaxed ${isTyping ? 'typing-cursor' : ''}`}>
+        <ReactMarkdown
+          remarkPlugins={[remarkMath, remarkGfm]}
+          rehypePlugins={[rehypeKatex]}
+          components={{
+            h1: ({node, ...props}) => <h1 className="text-2xl font-semibold mt-6 mb-4 text-slate-900" {...props} />,
+            h2: ({node, ...props}) => <h2 className="text-xl font-semibold mt-5 mb-3 text-slate-900" {...props} />,
+            h3: ({node, ...props}) => <h3 className="text-lg font-medium mt-4 mb-2 text-slate-900" {...props} />,
+            p: ({node, ...props}) => <p className="mb-4" {...props} />,
+            ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1.5 marker:text-slate-400" {...props} />,
+            ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1.5 marker:text-slate-400" {...props} />,
+            strong: ({node, ...props}) => <strong className="font-semibold text-slate-900" {...props} />,
+            table: ({node, ...props}) => (
+              <div className="overflow-x-auto my-6 rounded-2xl border border-slate-200">
+                <table className="w-full text-left border-collapse" {...props} />
+              </div>
+            ),
+            thead: ({node, ...props}) => <thead className="bg-[#f0f4f9] border-b border-slate-200" {...props} />,
+            th: ({node, ...props}) => <th className="py-3 px-4 font-medium text-slate-700 whitespace-nowrap" {...props} />,
+            td: ({node, ...props}) => <td className="py-3 px-4 border-b border-slate-100" {...props} />,
+          }}
+        >
+          {m.content}
+        </ReactMarkdown>
       </div>
     </div>
   );
@@ -69,7 +65,7 @@ export default function Chat() {
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState<'chat' | 'calculator'>('chat');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
   
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -78,7 +74,6 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(true);
   
   const [fck, setFck] = useState<number>(25);
@@ -92,6 +87,14 @@ export default function Chat() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-close sidebar on mobile
+  useEffect(() => {
+    const handleResize = () => { if (window.innerWidth < 768) setIsSidebarOpen(false); else setIsSidebarOpen(true); };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const loadChatHistory = async () => {
@@ -114,18 +117,15 @@ export default function Chat() {
           .eq('session_id', allSessions[0].id)
           .order('created_at', { ascending: true });
 
-        if (dbMessages) {
-          setMessages(dbMessages as Message[]);
-        }
+        if (dbMessages) setMessages(dbMessages as Message[]);
       }
       setIsFetchingHistory(false);
     };
-
     loadChatHistory();
   }, [supabase]);
 
   const loadSpecificSession = async (sessionId: string) => {
-    setIsSidebarOpen(false);
+    if (window.innerWidth < 768) setIsSidebarOpen(false);
     setActiveTab('chat');
     setActiveSessionId(sessionId);
     setIsFetchingHistory(true);
@@ -137,16 +137,12 @@ export default function Chat() {
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true });
 
-    if (dbMessages) {
-      setMessages(dbMessages as Message[]);
-    }
+    if (dbMessages) setMessages(dbMessages as Message[]);
     setIsFetchingHistory(false);
   };
 
   useEffect(() => {
-    if (activeTab === 'chat') {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (activeTab === 'chat') messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeTab]);
 
   const handleLogout = async () => {
@@ -158,7 +154,7 @@ export default function Chat() {
     setMessages([]);
     setActiveSessionId(null);
     setActiveTab('chat');
-    setIsSidebarOpen(false);
+    if (window.innerWidth < 768) setIsSidebarOpen(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,16 +169,10 @@ export default function Chat() {
     try {
       const res = await fetch('/api/chat', { method: 'POST', body: formData });
       if (!res.ok) throw new Error(await res.text());
-      setUploadedFiles(prev => [...new Set([...prev, file.name])]);
-      setUploadStatus({ type: 'success', message: 'Document added to secure memory.' });
-      setTimeout(() => setUploadStatus(null), 5000);
+      setUploadStatus({ type: 'success', message: 'PDF Memorized.' });
+      setTimeout(() => setUploadStatus(null), 3000);
     } catch (error: any) {
-      let errorMsg = error.message;
-      try {
-        const parsed = JSON.parse(error.message);
-        if (parsed.error) errorMsg = parsed.error;
-      } catch {}
-      setUploadStatus({ type: 'error', message: errorMsg });
+      setUploadStatus({ type: 'error', message: 'Failed to read PDF.' });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -255,262 +245,279 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden flex-col">
+    <div className="flex h-screen bg-white font-sans overflow-hidden">
       
-      {/* --- PERSISTENT TOP HEADER BAR --- */}
-      <header className="bg-slate-900 text-white h-16 shrink-0 shadow-md flex items-center px-4 sm:px-6 z-30">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setIsSidebarOpen(true)} 
-            className="p-2 hover:bg-slate-800 rounded-lg transition-colors group"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 group-hover:text-amber-500 transition-colors">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </button>
-          <div className="flex items-center gap-2 select-none">
-            <span className="text-xl">🏗️</span>
-            <h1 className="text-lg font-bold tracking-wide">Civil<span className="text-amber-500">GPT</span></h1>
-          </div>
-        </div>
-      </header>
+      {/* --- FIXED HAMBURGER BUTTON (Always Top Left) --- */}
+      <button 
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+        className="fixed top-3 left-4 z-[60] p-3 rounded-full hover:bg-[#e8eaed] text-slate-600 transition-colors"
+        aria-label="Toggle Menu"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+      </button>
 
-      {/* --- HIDDEN ANIMATED DRAWER --- */}
+      {/* --- MOBILE OVERLAY --- */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity" 
+          className="fixed inset-0 bg-black/20 z-40 md:hidden transition-opacity" 
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 shadow-2xl flex flex-col transform transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        
-        {/* Drawer Header */}
-        <div className="p-5 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/50">
-          <div className="flex items-center gap-2 select-none">
-            <span className="text-xl">🏗️</span>
-            <h1 className="text-lg font-bold tracking-wide text-white">Civil<span className="text-amber-500">GPT</span></h1>
-          </div>
-          <button className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" onClick={() => setIsSidebarOpen(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Animated Tools Section */}
-        <div className={`p-4 space-y-2 border-b border-slate-800/80 transition-all duration-500 delay-100 ${isSidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Tools</h3>
+      {/* --- GEMINI-STYLE SIDEBAR --- */}
+      <aside 
+        className={`fixed inset-y-0 left-0 z-50 md:relative bg-[#f0f4f9] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isSidebarOpen ? 'w-[280px] translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'} flex-shrink-0`}
+      >
+        <div className="w-[280px] h-full flex flex-col overflow-hidden">
           
-          <button 
-            onClick={handleNewChat}
-            className="w-full text-left text-sm py-3 px-4 mb-2 rounded-xl transition-all flex items-center gap-3 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 group"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            New Chat
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }}
-            className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-all flex items-center gap-3 group ${activeTab === 'chat' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform duration-300">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-            </svg>
-            AI Assistant
-          </button>
-          
-          <button 
-            onClick={() => { setActiveTab('calculator'); setIsSidebarOpen(false); }}
-            className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-all flex items-center gap-3 group ${activeTab === 'calculator' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform duration-300">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V13.5Zm0 2.25h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V18Zm2.502-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm-9.75-9.75h14.25v-.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v.75Zm0 0H19.5m-13.5 0v11.25c0 1.242 1.008 2.25 2.25 2.25h11.25c1.242 0 2.25-2.25V6m-13.5 0h13.5" />
-            </svg>
-            Mix Calculator
-          </button>
-        </div>
-        
-        {/* Animated History Section */}
-        <div className={`flex-1 p-3 space-y-1 overflow-y-auto transition-all duration-500 delay-200 ${isSidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}>
-          <div className="px-2 pt-2 pb-1">
-             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Chat History</h3>
+          {/* Header Space for Hamburger */}
+          <div className="h-[72px] pl-[72px] flex items-center shrink-0">
+             <span className="text-xl font-medium text-slate-600 tracking-wide select-none">CivilGPT</span>
           </div>
-          {sessions.length === 0 ? (
-             <div className="text-slate-500 text-sm text-center mt-10 p-4">No previous chats found.</div>
-          ) : (
-            sessions.map((session) => (
-              <button 
-                key={session.id} 
-                onClick={() => loadSpecificSession(session.id)}
-                className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-colors flex items-center gap-3 truncate ${activeSessionId === session.id ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+
+          {/* New Chat Button */}
+          <div className="px-4 py-2 shrink-0">
+            <button 
+              onClick={handleNewChat}
+              className="flex items-center gap-3 bg-[#e8eaed] hover:bg-[#dce0e3] text-slate-700 rounded-[16px] py-3.5 px-4 w-[160px] transition-all duration-200"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 shrink-0 text-slate-500">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <span className="font-medium text-sm">New chat</span>
+            </button>
+          </div>
+          
+          {/* Recent History */}
+          <div className="flex-1 overflow-y-auto mt-4 px-3 space-y-0.5 pb-4">
+             <h3 className="text-[13px] font-medium text-slate-500 px-3 mb-2">Recent</h3>
+             
+             {/* Tools nested in Recent for clean UX */}
+             <button 
+                onClick={() => { setActiveTab('chat'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
+                className={`w-full text-left text-[14px] py-2.5 px-3 rounded-full transition-colors flex items-center gap-3 truncate ${activeTab === 'chat' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-700 hover:bg-[#e8eaed]'}`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z" />
-                </svg>
-                <span className="truncate">{session.title || 'Engineering Workspace'}</span>
+                <span className="w-4 flex justify-center text-amber-500 shrink-0">✦</span>
+                <span className="truncate">AI Assistant</span>
               </button>
-            ))
-          )}
-        </div>
 
-        <div className={`p-4 border-t border-slate-800/80 bg-slate-900/50 transition-all duration-500 delay-300 ${isSidebarOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <button onClick={handleLogout} className="w-full py-2.5 px-3 text-sm text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
-            </svg>
-            Log Out
-          </button>
+              <button 
+                onClick={() => { setActiveTab('calculator'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
+                className={`w-full text-left text-[14px] py-2.5 px-3 mb-4 rounded-full transition-colors flex items-center gap-3 truncate ${activeTab === 'calculator' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-700 hover:bg-[#e8eaed]'}`}
+              >
+                <span className="w-4 flex justify-center text-slate-500 shrink-0">🧮</span>
+                <span className="truncate">Design Mix IS 10262</span>
+              </button>
+
+             {sessions.length === 0 && !isFetchingHistory ? (
+                <div className="text-slate-500 text-sm px-3 mt-4">No previous chats.</div>
+             ) : (
+               sessions.map((session) => (
+                 <button 
+                   key={session.id} 
+                   onClick={() => loadSpecificSession(session.id)}
+                   className={`w-full text-left text-[14px] py-2.5 px-3 rounded-full transition-colors flex items-center gap-3 truncate ${activeSessionId === session.id && activeTab === 'chat' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-600 hover:bg-[#e8eaed]'}`}
+                 >
+                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 shrink-0 text-slate-400">
+                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z" />
+                   </svg>
+                   <span className="truncate">{session.title || 'Engineering Workspace'}</span>
+                 </button>
+               ))
+             )}
+          </div>
+
+          {/* User / Settings Footer */}
+          <div className="p-3 shrink-0">
+            <button onClick={handleLogout} className="w-full py-2.5 px-3 text-[14px] text-slate-600 hover:bg-[#e8eaed] rounded-full flex items-center gap-3 transition-colors">
+              <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center text-white text-xs shrink-0">
+                U
+              </div>
+              <span className="truncate flex-1 text-left">Sign out</span>
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* --- CENTER VIEWPORT --- */}
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-50 relative overflow-hidden">
+      {/* --- MAIN CONTENT AREA --- */}
+      <main className="flex-1 flex flex-col relative h-full min-w-0 transition-all duration-300">
+        
+        {/* Top spacing to account for fixed hamburger on mobile/desktop */}
+        <div className="h-[72px] shrink-0 w-full flex items-center md:hidden pl-[72px]">
+           {!isSidebarOpen && <span className="text-xl font-medium text-slate-600 tracking-wide select-none">CivilGPT</span>}
+        </div>
         
         {activeTab === 'chat' && (
-          <>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-4xl mx-auto space-y-6">
-              
-              {isFetchingHistory ? (
-                <div className="flex items-center justify-center h-full">
-                  <span className="animate-spin text-4xl text-amber-500">⏳</span>
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-slate-500">
-                  <div className="w-20 h-20 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-4xl shadow-sm">
-                    📐
+          <div className="flex-1 flex flex-col relative overflow-hidden h-full">
+            
+            {/* Scrollable Chat Area */}
+            <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-32">
+              <div className="max-w-3xl mx-auto w-full">
+                
+                {isFetchingHistory ? (
+                  <div className="flex items-center justify-center h-full pt-20">
+                    <span className="animate-spin text-3xl text-[#e8eaed]">⏳</span>
                   </div>
-                  <h2 className="text-2xl font-semibold text-slate-700">Ready to design.</h2>
-                  <p className="max-w-md">Ask CivilGPT about structural analysis, load calculations, or upload codes to memorize.</p>
-                </div>
-              ) : (
-                messages.map((m, index) => (
-                  <MessageBubble key={m.id} m={m} isTyping={isLoading && index === messages.length - 1 && m.role === 'assistant'} />
-                ))
-              )}
-              <div ref={messagesEndRef} />
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col h-full text-left space-y-4 pt-[15vh]">
+                    <h2 className="text-4xl font-medium text-[#c4c7c5] tracking-tight mb-2">Hello, Engineer.</h2>
+                    <p className="text-2xl font-medium text-[#c4c7c5] max-w-xl leading-relaxed">How can I help you with your structural analysis today?</p>
+                  </div>
+                ) : (
+                  messages.map((m, index) => (
+                    <MessageBubble key={m.id} m={m} isTyping={isLoading && index === messages.length - 1 && m.role === 'assistant'} />
+                  ))
+                )}
+                <div ref={messagesEndRef} className="h-4" />
+              </div>
             </div>
 
-            <div className="p-4 max-w-4xl mx-auto w-full flex flex-col gap-3">
-              {(uploadStatus || uploadedFiles.length > 0) && (
-                <div className="flex flex-wrap items-center gap-2 px-1">
-                  {uploadStatus && (
-                    <span className={`text-xs px-2.5 py-1.5 rounded-lg font-medium border ${uploadStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                      {uploadStatus.message}
-                    </span>
-                  )}
-                  {uploadedFiles.map((file, idx) => (
-                    <span key={idx} className="text-xs bg-white border border-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm">
-                      📎 {file}
-                    </span>
-                  ))}
-                </div>
-              )}
+            {/* Floating Pill Input Box */}
+            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white to-transparent pt-6 pb-6 px-4 md:px-8">
+              <div className="max-w-3xl mx-auto w-full">
+                
+                {uploadStatus && (
+                  <div className={`mb-3 text-[13px] px-4 py-2 rounded-full inline-flex font-medium shadow-sm ${uploadStatus.type === 'success' ? 'bg-[#e6f4ea] text-[#137333]' : 'bg-[#fce8e6] text-[#c5221f]'}`}>
+                    {uploadStatus.message}
+                  </div>
+                )}
 
-              <form onSubmit={customHandleSubmit} className="relative flex items-center shadow-sm rounded-2xl bg-white border border-slate-200 transition-all focus-within:border-amber-400 focus-within:shadow-md">
-                <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isLoading} className="absolute left-2 text-slate-400 hover:text-amber-500 hover:bg-slate-50 p-2 rounded-xl transition-colors bottom-2 h-10 w-10">
-                  {isUploading ? "⏳" : "📎"}
-                </button>
-                <textarea className="w-full bg-transparent text-slate-900 rounded-2xl pl-14 pr-14 py-4 focus:outline-none resize-none min-h-[56px] max-h-[200px]" rows={1} value={myInput} placeholder="Type your engineering query here..." onChange={(e) => setMyInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); customHandleSubmit(); } }} disabled={isLoading} />
-                <button type="submit" disabled={myInput.trim() === "" || isLoading} className="absolute right-2 bg-amber-500 text-white p-2.5 rounded-xl hover:bg-amber-600 transition-colors h-10 w-10 bottom-2 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                    <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-                  </svg>
-                </button>
-              </form>
+                <form onSubmit={customHandleSubmit} className="relative flex items-end bg-[#f0f4f9] rounded-[32px] p-2 pr-4 transition-all focus-within:bg-white focus-within:shadow-md border border-transparent focus-within:border-slate-200">
+                  
+                  <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+                  <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()} 
+                    disabled={isUploading || isLoading} 
+                    className="p-3 text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-full transition-colors shrink-0 mb-0.5 ml-1"
+                    title="Upload IS Code PDF"
+                  >
+                    {isUploading ? "⏳" : (
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                    )}
+                  </button>
+                  
+                  <textarea 
+                    className="flex-1 bg-transparent text-slate-800 placeholder-slate-500 text-[16px] px-3 py-3.5 focus:outline-none resize-none min-h-[52px] max-h-[200px]" 
+                    rows={1} 
+                    value={myInput} 
+                    placeholder="Ask about codes, mix proportions, or loads..." 
+                    onChange={(e) => setMyInput(e.target.value)} 
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); customHandleSubmit(); } }} 
+                    disabled={isLoading} 
+                  />
+                  
+                  <button 
+                    type="submit" 
+                    disabled={myInput.trim() === "" || isLoading} 
+                    className={`p-3 rounded-full shrink-0 mb-0.5 transition-colors ${myInput.trim() === "" || isLoading ? 'text-slate-300' : 'text-slate-800 hover:bg-slate-200/50'}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                      <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                    </svg>
+                  </button>
+
+                </form>
+                <div className="text-center mt-3 text-[11px] text-slate-400">
+                  CivilGPT can make mistakes. Verify critical structural calculations against IS Codes.
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         )}
 
+        {/* --- CALCULATOR INTERFACE --- */}
         {activeTab === 'calculator' && (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 w-full max-w-5xl mx-auto">
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
-              <div className="border-b border-slate-200 pb-5 mb-8">
-                <h2 className="text-2xl font-bold text-slate-900">Concrete Mix Design Calculator</h2>
-                <p className="text-slate-500 mt-1">Based on standard IS 10262:2019 absolute volume method.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Target Grade of Concrete (fck)</label>
-                    <select value={fck} onChange={e => setFck(Number(e.target.value))} className="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-amber-500 outline-none">
-                      <option value={20}>M20</option>
-                      <option value={25}>M25</option>
-                      <option value={30}>M30</option>
-                      <option value={40}>M40</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Assumed Standard Deviation (s) - N/mm²</label>
-                    <input type="number" step="0.1" value={stdDev} onChange={e => setStdDev(Number(e.target.value))} className="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-amber-500 outline-none" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Water-Cement Ratio</label>
-                    <input type="number" step="0.01" value={wcRatio} onChange={e => setWcRatio(Number(e.target.value))} className="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-amber-500 outline-none" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Sp. Gravity (Cement)</label>
-                      <input type="number" step="0.01" value={sgCement} onChange={e => setSgCement(Number(e.target.value))} className="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-amber-500 outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Max Water Content</label>
-                      <input type="number" value={waterContent} onChange={e => setWaterContent(Number(e.target.value))} className="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-amber-500 outline-none" placeholder="kg/m³" />
-                    </div>
-                  </div>
-
-                  <button onClick={calculateMix} className="w-full py-4 mt-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-md">
-                    Calculate Proportions
-                  </button>
+          <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
+            <div className="max-w-4xl mx-auto w-full">
+              <div className="bg-white border border-slate-200 rounded-[32px] p-8 md:p-10 shadow-sm">
+                <div className="mb-8">
+                  <h2 className="text-3xl font-medium text-slate-800 tracking-tight">Mix Design Calculator</h2>
+                  <p className="text-slate-500 mt-2 text-[15px]">IS 10262:2019 Absolute Volume Method</p>
                 </div>
 
-                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 h-full">
-                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Output Proportions per m³</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
                   
-                  {mixResult ? (
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-end border-b border-slate-200 pb-3">
-                        <span className="font-medium text-slate-600">Target Mean Strength ($f_m$)</span>
-                        <span className="text-xl font-bold text-slate-900">{mixResult.targetStrength} N/mm²</span>
-                      </div>
-                      <div className="flex justify-between items-end border-b border-slate-200 pb-3">
-                        <span className="font-medium text-slate-600">Cement</span>
-                        <span className="text-xl font-bold text-amber-600">{mixResult.cement} kg</span>
-                      </div>
-                      <div className="flex justify-between items-end border-b border-slate-200 pb-3">
-                        <span className="font-medium text-slate-600">Water</span>
-                        <span className="text-xl font-bold text-blue-600">{mixResult.water} kg</span>
-                      </div>
-                      <div className="flex justify-between items-end border-b border-slate-200 pb-3">
-                        <span className="font-medium text-slate-600">Fine Aggregate (FA)</span>
-                        <span className="text-xl font-bold text-slate-900">{mixResult.fa} kg</span>
-                      </div>
-                      <div className="flex justify-between items-end border-b border-slate-200 pb-3">
-                        <span className="font-medium text-slate-600">Coarse Aggregate (CA)</span>
-                        <span className="text-xl font-bold text-slate-900">{mixResult.ca} kg</span>
-                      </div>
+                  {/* Inputs */}
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-[14px] font-medium text-slate-700 mb-2">Target Grade (fck)</label>
+                      <select value={fck} onChange={e => setFck(Number(e.target.value))} className="w-full p-3.5 rounded-[16px] border border-slate-200 bg-[#f0f4f9] focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none text-[15px] transition-colors">
+                        <option value={20}>M20</option>
+                        <option value={25}>M25</option>
+                        <option value={30}>M30</option>
+                        <option value={40}>M40</option>
+                      </select>
+                    </div>
 
-                      <div className="pt-4 bg-amber-50 p-4 rounded-xl border border-amber-200 text-center mt-6">
-                        <p className="text-xs text-amber-700 font-semibold uppercase mb-1">Mix Ratio (C : FA : CA)</p>
-                        <p className="text-2xl font-bold text-amber-900">{mixResult.ratio}</p>
+                    <div>
+                      <label className="block text-[14px] font-medium text-slate-700 mb-2">Standard Deviation (s) - N/mm²</label>
+                      <input type="number" step="0.1" value={stdDev} onChange={e => setStdDev(Number(e.target.value))} className="w-full p-3.5 rounded-[16px] border border-slate-200 bg-[#f0f4f9] focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none text-[15px] transition-colors" />
+                    </div>
+
+                    <div>
+                      <label className="block text-[14px] font-medium text-slate-700 mb-2">Water-Cement Ratio</label>
+                      <input type="number" step="0.01" value={wcRatio} onChange={e => setWcRatio(Number(e.target.value))} className="w-full p-3.5 rounded-[16px] border border-slate-200 bg-[#f0f4f9] focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none text-[15px] transition-colors" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[14px] font-medium text-slate-700 mb-2">Sp. Gravity (Cement)</label>
+                        <input type="number" step="0.01" value={sgCement} onChange={e => setSgCement(Number(e.target.value))} className="w-full p-3.5 rounded-[16px] border border-slate-200 bg-[#f0f4f9] focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none text-[15px] transition-colors" />
+                      </div>
+                      <div>
+                        <label className="block text-[14px] font-medium text-slate-700 mb-2">Max Water (kg/m³)</label>
+                        <input type="number" value={waterContent} onChange={e => setWaterContent(Number(e.target.value))} className="w-full p-3.5 rounded-[16px] border border-slate-200 bg-[#f0f4f9] focus:bg-white focus:ring-2 focus:ring-slate-300 outline-none text-[15px] transition-colors" />
                       </div>
                     </div>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center space-y-3 pb-12">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V13.5Zm0 2.25h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V18Zm2.502-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm-9.75-9.75h14.25v-.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v.75Zm0 0H19.5m-13.5 0v11.25c0 1.242 1.008 2.25 2.25 2.25h11.25c1.242 0 2.25-2.25V6m-13.5 0h13.5" />
-                      </svg>
-                      <p>Adjust your parameters and click calculate to view the mix proportions.</p>
-                    </div>
-                  )}
+
+                    <button onClick={calculateMix} className="w-full py-4 mt-2 bg-slate-800 text-white rounded-[24px] font-medium text-[15px] hover:bg-slate-700 transition-colors shadow-sm">
+                      Calculate Proportions
+                    </button>
+                  </div>
+
+                  {/* Results */}
+                  <div className="bg-[#f0f4f9] rounded-[24px] p-8 h-full">
+                    <h3 className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-6">Output per m³</h3>
+                    
+                    {mixResult ? (
+                      <div className="space-y-5">
+                        <div className="flex justify-between items-end border-b border-slate-200/60 pb-3">
+                          <span className="text-[15px] text-slate-600">Target Mean Strength ($f_m$)</span>
+                          <span className="text-lg font-medium text-slate-800">{mixResult.targetStrength} N/mm²</span>
+                        </div>
+                        <div className="flex justify-between items-end border-b border-slate-200/60 pb-3">
+                          <span className="text-[15px] text-slate-600">Cement</span>
+                          <span className="text-lg font-medium text-slate-800">{mixResult.cement} kg</span>
+                        </div>
+                        <div className="flex justify-between items-end border-b border-slate-200/60 pb-3">
+                          <span className="text-[15px] text-slate-600">Water</span>
+                          <span className="text-lg font-medium text-slate-800">{mixResult.water} kg</span>
+                        </div>
+                        <div className="flex justify-between items-end border-b border-slate-200/60 pb-3">
+                          <span className="text-[15px] text-slate-600">Fine Aggregate (FA)</span>
+                          <span className="text-lg font-medium text-slate-800">{mixResult.fa} kg</span>
+                        </div>
+                        <div className="flex justify-between items-end border-b border-slate-200/60 pb-3">
+                          <span className="text-[15px] text-slate-600">Coarse Aggregate (CA)</span>
+                          <span className="text-lg font-medium text-slate-800">{mixResult.ca} kg</span>
+                        </div>
+
+                        <div className="pt-6 mt-6">
+                          <p className="text-[13px] text-slate-500 mb-1 font-medium">Mix Ratio (C : FA : CA)</p>
+                          <p className="text-3xl font-medium text-slate-800 tracking-tight">{mixResult.ratio}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center space-y-3 pb-12">
+                        <p className="text-[15px]">Adjust your parameters and click calculate to view the mix proportions.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

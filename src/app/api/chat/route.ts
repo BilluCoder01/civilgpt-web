@@ -160,7 +160,7 @@ export async function POST(req: Request) {
           }]);
 
           // OPTIONAL: Auto-generate title if it's the first exchange
-          const { data: msgCount } = await supabaseAdmin
+          const { count: msgCount } = await supabaseAdmin
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('session_id', sessionId);

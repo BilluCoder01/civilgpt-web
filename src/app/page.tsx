@@ -66,7 +66,8 @@ export default function Chat() {
 
   const [activeTab, setActiveTab] = useState<'chat' | 'calculator'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
-  const [isDarkMode, setIsDarkMode] = useState(false); // NEW: Dark Mode State
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // NEW: Settings Menu State
   
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -247,7 +248,7 @@ export default function Chat() {
   return (
     <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${isDarkMode ? 'bg-[#131314] text-slate-200' : 'bg-white text-slate-800'}`}>
       
-      {/* --- SIDEBAR TOGGLE ICON (Replaced Hamburger) --- */}
+      {/* --- SIDEBAR TOGGLE ICON --- */}
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
         className={`fixed top-3 left-3 z-[60] p-2.5 rounded-full transition-colors ${isDarkMode ? 'hover:bg-[#333537] text-slate-400' : 'hover:bg-[#e8eaed] text-slate-600'}`}
@@ -267,8 +268,9 @@ export default function Chat() {
       )}
 
       {/* --- SIDEBAR --- */}
+      {/* Note: overflow-hidden removed so tooltips can escape */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col overflow-hidden ${
+        className={`fixed inset-y-0 left-0 z-50 md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col ${
           isDarkMode ? 'bg-[#1e1f20]' : 'bg-[#f0f4f9]'
         } ${
           isSidebarOpen ? 'w-[260px] translate-x-0' : 'w-[260px] -translate-x-full md:translate-x-0 md:w-[64px]'
@@ -277,30 +279,30 @@ export default function Chat() {
         {/* Header Space */}
         <div className="h-[64px] flex items-center shrink-0">
           <div className="w-[64px] shrink-0" />
-          <span className={`text-[18px] font-medium tracking-wide select-none whitespace-nowrap transition-all duration-300 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} ${isSidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
+          <span className={`text-[18px] font-medium tracking-wide select-none whitespace-nowrap overflow-hidden transition-all duration-300 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} ${isSidebarOpen ? 'opacity-100 max-w-[120px]' : 'opacity-0 max-w-0'}`}>
             CivilGPT
           </span>
         </div>
 
-        {/* New Chat Button w/ Tooltip */}
-        <div className="px-3 py-2 shrink-0 relative group">
+        {/* New Chat Button */}
+        <div className="px-3 py-2 shrink-0 relative group flex justify-center md:justify-start">
           <button 
             onClick={handleNewChat}
-            className={`flex items-center transition-all duration-300 overflow-hidden ${
+            className={`flex items-center transition-all duration-300 ${
               isDarkMode ? 'bg-[#333537] hover:bg-[#444749] text-slate-200' : 'bg-[#e8eaed] hover:bg-[#dce0e3] text-slate-700'
             } ${
-              isSidebarOpen ? 'rounded-[16px] py-2.5 px-3.5 w-[140px]' : 'rounded-full h-[40px] w-[40px] justify-center px-0 mx-auto'
+              isSidebarOpen ? 'rounded-[16px] py-2.5 px-3.5 w-full md:w-[140px]' : 'rounded-full h-[40px] w-[40px] justify-center px-0'
             }`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px] shrink-0">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            <span className={`font-medium text-[13px] whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-2.5 opacity-100' : 'w-0 opacity-0 ml-0'}`}>
+            <span className={`font-medium text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'ml-2.5 opacity-100 max-w-[100px]' : 'w-0 opacity-0 ml-0 max-w-0'}`}>
               New chat
             </span>
           </button>
           {!isSidebarOpen && (
-             <div className={`absolute left-[54px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
+             <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
                New Chat
              </div>
           )}
@@ -308,43 +310,43 @@ export default function Chat() {
         
         {/* Tools Section */}
         <div className="mt-2 px-3 space-y-1">
-           {isSidebarOpen && (
-               <h3 className={`text-[12px] font-medium px-2 mb-2 transition-opacity duration-300 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Tools</h3>
-           )}
+           <h3 className={`text-[12px] font-medium px-2 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${isDarkMode ? 'text-slate-500' : 'text-slate-500'} ${isSidebarOpen ? 'max-w-[100px] opacity-100' : 'max-w-0 opacity-0 h-0 m-0'}`}>
+             Tools
+           </h3>
            
-           <div className="relative group w-full">
+           <div className="relative group w-full flex justify-center md:justify-start">
              <button 
                 onClick={() => { setActiveTab('chat'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
+                className={`flex items-center rounded-full transition-colors ${
                   activeTab === 'chat' 
                     ? (isDarkMode ? 'bg-[#333537] text-amber-400 font-medium' : 'bg-[#dce0e3] text-slate-900 font-medium') 
                     : (isDarkMode ? 'text-slate-300 hover:bg-[#333537]' : 'text-slate-700 hover:bg-[#e8eaed]')
-                } ${isSidebarOpen ? 'py-2 px-3' : 'h-[40px] w-[40px] justify-center px-0 mx-auto'}`}
+                } ${isSidebarOpen ? 'w-full py-2 px-3' : 'h-[40px] w-[40px] justify-center px-0'}`}
               >
                 <span className="w-5 flex justify-center text-amber-500 shrink-0 text-sm">✦</span>
-                <span className={`text-[13px] whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>AI Assistant</span>
+                <span className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100 max-w-[200px]' : 'w-0 opacity-0 ml-0 max-w-0'}`}>AI Assistant</span>
               </button>
               {!isSidebarOpen && (
-                 <div className={`absolute left-[54px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
+                 <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
                    AI Assistant
                  </div>
               )}
            </div>
 
-           <div className="relative group w-full">
+           <div className="relative group w-full flex justify-center md:justify-start">
               <button 
                 onClick={() => { setActiveTab('calculator'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
+                className={`flex items-center rounded-full transition-colors ${
                   activeTab === 'calculator' 
                     ? (isDarkMode ? 'bg-[#333537] text-slate-100 font-medium' : 'bg-[#dce0e3] text-slate-900 font-medium') 
                     : (isDarkMode ? 'text-slate-300 hover:bg-[#333537]' : 'text-slate-700 hover:bg-[#e8eaed]')
-                } ${isSidebarOpen ? 'py-2 px-3' : 'h-[40px] w-[40px] justify-center px-0 mx-auto'}`}
+                } ${isSidebarOpen ? 'w-full py-2 px-3' : 'h-[40px] w-[40px] justify-center px-0'}`}
               >
                 <span className="w-5 flex justify-center text-slate-400 shrink-0 text-sm">🧮</span>
-                <span className={`text-[13px] whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>Mix Calculator</span>
+                <span className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100 max-w-[200px]' : 'w-0 opacity-0 ml-0 max-w-0'}`}>Mix Calculator</span>
               </button>
               {!isSidebarOpen && (
-                 <div className={`absolute left-[54px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
+                 <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
                    Mix Calculator
                  </div>
               )}
@@ -352,33 +354,33 @@ export default function Chat() {
         </div>
 
         {/* Chat History List */}
-        <div className="flex-1 overflow-y-auto mt-2 px-3 space-y-0.5 pb-4 scrollbar-hide">
-           {isSidebarOpen && (
-               <h3 className={`text-[12px] font-medium px-2 mt-4 mb-2 transition-opacity duration-300 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Recent</h3>
-           )}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden mt-2 px-3 space-y-0.5 pb-4">
+           <h3 className={`text-[12px] font-medium px-2 mt-4 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${isDarkMode ? 'text-slate-500' : 'text-slate-500'} ${isSidebarOpen ? 'max-w-[100px] opacity-100' : 'max-w-0 opacity-0 h-0 m-0'}`}>
+             Recent
+           </h3>
 
            {sessions.length === 0 && !isFetchingHistory && isSidebarOpen ? (
               <div className="text-slate-500 text-[13px] px-3 mt-2 whitespace-nowrap">No previous chats.</div>
            ) : (
              sessions.map((session) => (
-               <div key={session.id} className="relative group w-full">
+               <div key={session.id} className="relative group w-full flex justify-center md:justify-start">
                  <button 
                    onClick={() => loadSpecificSession(session.id)}
-                   className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
+                   className={`flex items-center rounded-full transition-colors ${
                      activeSessionId === session.id && activeTab === 'chat' 
                        ? (isDarkMode ? 'bg-[#333537] text-slate-200' : 'bg-[#dce0e3] text-slate-900 font-medium') 
                        : (isDarkMode ? 'text-slate-400 hover:bg-[#333537]' : 'text-slate-600 hover:bg-[#e8eaed]')
-                   } ${isSidebarOpen ? 'py-2 px-3' : 'h-[40px] w-[40px] justify-center px-0 mx-auto'}`}
+                   } ${isSidebarOpen ? 'w-full py-2 px-3' : 'h-[40px] w-[40px] justify-center px-0'}`}
                  >
                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-[18px] h-[18px] shrink-0 opacity-70">
                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z" />
                    </svg>
-                   <span className={`text-[13px] whitespace-nowrap truncate transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>
+                   <span className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100 max-w-[150px]' : 'max-w-0 opacity-0 ml-0'}`}>
                      {session.title || 'Workspace'}
                    </span>
                  </button>
                  {!isSidebarOpen && (
-                   <div className={`absolute left-[54px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
+                   <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
                      {session.title || 'Workspace'}
                    </div>
                  )}
@@ -387,47 +389,67 @@ export default function Chat() {
            )}
         </div>
 
-        {/* Footer: Dark Mode & Sign out */}
-        <div className="p-3 shrink-0 flex flex-col gap-1">
+        {/* Footer: Settings & User */}
+        <div className="p-3 shrink-0 flex flex-col gap-1 relative">
           
-          {/* Dark Mode Toggle */}
-          <div className="relative group w-full">
-            <button 
-              onClick={() => setIsDarkMode(!isDarkMode)} 
-              className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
-                isSidebarOpen ? 'py-2 px-2.5' : 'h-[40px] w-[40px] justify-center px-0 mx-auto'
-              } ${isDarkMode ? 'text-slate-300 hover:bg-[#333537]' : 'text-slate-600 hover:bg-[#e8eaed]'}`}
-            >
-              <span className="w-[20px] flex justify-center shrink-0 text-sm">{isDarkMode ? '☀️' : '🌙'}</span>
-              <span className={`text-[13px] font-medium whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>
-                {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-              </span>
-            </button>
-            {!isSidebarOpen && (
-               <div className={`absolute left-[54px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
-                 {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-               </div>
-            )}
-          </div>
+          {/* Overlay to close settings */}
+          {isSettingsOpen && (
+            <div className="fixed inset-0 z-[90]" onClick={() => setIsSettingsOpen(false)} />
+          )}
 
-          {/* Logout */}
-          <div className="relative group w-full">
+          {/* Settings Menu Popup */}
+          {isSettingsOpen && (
+            <div className={`absolute left-full ml-2 bottom-4 w-[220px] rounded-2xl p-2 shadow-xl z-[101] border transition-colors ${isDarkMode ? 'bg-[#333537] border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}>
+               <div className="text-[11px] font-semibold uppercase tracking-wider mb-2 px-2 opacity-60">Settings</div>
+               
+               {/* Dark Mode Toggle inside Settings */}
+               <div 
+                 onClick={() => setIsDarkMode(!isDarkMode)}
+                 className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}
+               >
+                 <div className="flex items-center gap-2.5">
+                   <span className="text-[15px]">{isDarkMode ? '🌙' : '☀️'}</span>
+                   <span className="text-[13px] font-medium">Dark Theme</span>
+                 </div>
+                 {/* Visual Switch */}
+                 <div className={`w-8 h-[18px] rounded-full flex items-center p-0.5 transition-colors ${isDarkMode ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                   <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-300 ${isDarkMode ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+                 </div>
+               </div>
+
+               {/* Logout inside Settings */}
+               <div className="my-1 border-t border-slate-200/20" />
+               <div 
+                 onClick={handleLogout}
+                 className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-rose-400' : 'hover:bg-slate-100 text-rose-500'}`}
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[16px] h-[16px]">
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+                 </svg>
+                 <span className="text-[13px] font-medium">Sign out</span>
+               </div>
+            </div>
+          )}
+
+          {/* Settings / Gear Button */}
+          <div className="relative group w-full flex justify-center md:justify-start">
             <button 
-              onClick={handleLogout} 
-              className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
-                isSidebarOpen ? 'py-2 px-2' : 'h-[40px] w-[40px] justify-center px-0 mx-auto'
-              } ${isDarkMode ? 'text-slate-400 hover:bg-[#333537]' : 'text-slate-600 hover:bg-[#e8eaed]'}`}
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+              className={`flex items-center rounded-full transition-colors ${
+                isSidebarOpen ? 'w-full py-2 px-2.5' : 'h-[40px] w-[40px] justify-center px-0'
+              } ${isSettingsOpen ? (isDarkMode ? 'bg-[#333537] text-slate-200' : 'bg-[#e8eaed] text-slate-900') : (isDarkMode ? 'text-slate-400 hover:bg-[#333537]' : 'text-slate-600 hover:bg-[#e8eaed]')}`}
             >
-              <div className={`w-[24px] h-[24px] rounded-full flex items-center justify-center text-xs shrink-0 font-medium ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-300 text-white'}`}>
-                U
-              </div>
-              <span className={`text-[13px] font-medium whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>
-                Sign out
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px] shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.528.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+              <span className={`text-[13px] font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100 max-w-[150px]' : 'max-w-0 opacity-0 ml-0'}`}>
+                Settings
               </span>
             </button>
-            {!isSidebarOpen && (
-               <div className={`absolute left-[54px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
-                 Sign out
+            {!isSidebarOpen && !isSettingsOpen && (
+               <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'}`}>
+                 Settings
                </div>
             )}
           </div>

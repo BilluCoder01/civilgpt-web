@@ -250,7 +250,7 @@ export default function Chat() {
       {/* --- FIXED HAMBURGER BUTTON (Always Top Left) --- */}
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
-        className="fixed top-3 left-4 z-[60] p-3 rounded-full hover:bg-[#e8eaed] text-slate-600 transition-colors"
+        className="fixed top-3 left-3 z-[60] p-3 rounded-full hover:bg-[#e8eaed] text-slate-600 transition-colors"
         aria-label="Toggle Menu"
       >
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
@@ -268,83 +268,107 @@ export default function Chat() {
 
       {/* --- GEMINI-STYLE SIDEBAR --- */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 md:relative bg-[#f0f4f9] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isSidebarOpen ? 'w-[280px] translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'} flex-shrink-0`}
+        className={`fixed inset-y-0 left-0 z-50 md:relative bg-[#f0f4f9] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col overflow-hidden ${
+          isSidebarOpen ? 'w-[280px] translate-x-0' : 'w-[280px] -translate-x-full md:translate-x-0 md:w-[72px]'
+        }`}
       >
-        <div className="w-[280px] h-full flex flex-col overflow-hidden">
-          
-          {/* Header Space for Hamburger */}
-          <div className="h-[72px] pl-[72px] flex items-center shrink-0">
-             <span className="text-xl font-medium text-slate-600 tracking-wide select-none">CivilGPT</span>
-          </div>
+        {/* Header Space for fixed hamburger */}
+        <div className="h-[72px] flex items-center shrink-0">
+          <div className="w-[72px] shrink-0" />
+          <span className={`text-xl font-medium text-slate-600 tracking-wide select-none whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
+            CivilGPT
+          </span>
+        </div>
 
-          {/* New Chat Button */}
-          <div className="px-4 py-2 shrink-0">
-            <button 
-              onClick={handleNewChat}
-              className="flex items-center gap-3 bg-[#e8eaed] hover:bg-[#dce0e3] text-slate-700 rounded-[16px] py-3.5 px-4 w-[160px] transition-all duration-200"
+        {/* New Chat Button */}
+        <div className="px-3 py-2 shrink-0">
+          <button 
+            onClick={handleNewChat}
+            className={`flex items-center bg-[#e8eaed] hover:bg-[#dce0e3] text-slate-700 transition-all duration-300 overflow-hidden ${
+              isSidebarOpen ? 'rounded-[16px] py-3.5 px-4 w-[160px]' : 'rounded-full h-[48px] w-[48px] justify-center px-0 mx-auto'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 shrink-0 text-slate-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>
+              New chat
+            </span>
+          </button>
+        </div>
+        
+        {/* Recent History */}
+        <div className="flex-1 overflow-y-auto mt-4 px-3 space-y-1 pb-4 scrollbar-hide">
+           {isSidebarOpen ? (
+               <h3 className="text-[13px] font-medium text-slate-500 px-3 mb-3 transition-opacity duration-300">Recent</h3>
+           ) : (
+               <div className="h-[28px]" />
+           )}
+           
+           {/* Tools */}
+           <button 
+              onClick={() => { setActiveTab('chat'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
+              className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
+                activeTab === 'chat' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-700 hover:bg-[#e8eaed]'
+              } ${isSidebarOpen ? 'py-2.5 px-3' : 'h-[48px] w-[48px] justify-center px-0 mx-auto'}`}
+              title="AI Assistant"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 shrink-0 text-slate-500">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              <span className="font-medium text-sm">New chat</span>
+              <span className="w-5 flex justify-center text-amber-500 shrink-0">✦</span>
+              <span className={`whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>AI Assistant</span>
             </button>
-          </div>
-          
-          {/* Recent History */}
-          <div className="flex-1 overflow-y-auto mt-4 px-3 space-y-0.5 pb-4">
-             <h3 className="text-[13px] font-medium text-slate-500 px-3 mb-2">Recent</h3>
-             
-             {/* Tools nested in Recent for clean UX */}
-             <button 
-                onClick={() => { setActiveTab('chat'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                className={`w-full text-left text-[14px] py-2.5 px-3 rounded-full transition-colors flex items-center gap-3 truncate ${activeTab === 'chat' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-700 hover:bg-[#e8eaed]'}`}
-              >
-                <span className="w-4 flex justify-center text-amber-500 shrink-0">✦</span>
-                <span className="truncate">AI Assistant</span>
-              </button>
 
-              <button 
-                onClick={() => { setActiveTab('calculator'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                className={`w-full text-left text-[14px] py-2.5 px-3 mb-4 rounded-full transition-colors flex items-center gap-3 truncate ${activeTab === 'calculator' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-700 hover:bg-[#e8eaed]'}`}
-              >
-                <span className="w-4 flex justify-center text-slate-500 shrink-0">🧮</span>
-                <span className="truncate">Design Mix IS 10262</span>
-              </button>
-
-             {sessions.length === 0 && !isFetchingHistory ? (
-                <div className="text-slate-500 text-sm px-3 mt-4">No previous chats.</div>
-             ) : (
-               sessions.map((session) => (
-                 <button 
-                   key={session.id} 
-                   onClick={() => loadSpecificSession(session.id)}
-                   className={`w-full text-left text-[14px] py-2.5 px-3 rounded-full transition-colors flex items-center gap-3 truncate ${activeSessionId === session.id && activeTab === 'chat' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-600 hover:bg-[#e8eaed]'}`}
-                 >
-                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 shrink-0 text-slate-400">
-                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z" />
-                   </svg>
-                   <span className="truncate">{session.title || 'Engineering Workspace'}</span>
-                 </button>
-               ))
-             )}
-          </div>
-
-          {/* User / Settings Footer */}
-          <div className="p-3 shrink-0">
-            <button onClick={handleLogout} className="w-full py-2.5 px-3 text-[14px] text-slate-600 hover:bg-[#e8eaed] rounded-full flex items-center gap-3 transition-colors">
-              <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center text-white text-xs shrink-0">
-                U
-              </div>
-              <span className="truncate flex-1 text-left">Sign out</span>
+            <button 
+              onClick={() => { setActiveTab('calculator'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
+              className={`w-full flex items-center rounded-full transition-colors overflow-hidden mb-4 ${
+                activeTab === 'calculator' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-700 hover:bg-[#e8eaed]'
+              } ${isSidebarOpen ? 'py-2.5 px-3' : 'h-[48px] w-[48px] justify-center px-0 mx-auto'}`}
+              title="Mix Calculator"
+            >
+              <span className="w-5 flex justify-center text-slate-500 shrink-0">🧮</span>
+              <span className={`whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>Mix Calculator</span>
             </button>
-          </div>
+
+           {/* Chat List */}
+           {sessions.length === 0 && !isFetchingHistory && isSidebarOpen ? (
+              <div className="text-slate-500 text-sm px-3 mt-4 whitespace-nowrap">No previous chats.</div>
+           ) : (
+             sessions.map((session) => (
+               <button 
+                 key={session.id} 
+                 onClick={() => loadSpecificSession(session.id)}
+                 className={`w-full flex items-center rounded-full transition-colors overflow-hidden ${
+                   activeSessionId === session.id && activeTab === 'chat' ? 'bg-[#dce0e3] text-slate-900 font-medium' : 'text-slate-600 hover:bg-[#e8eaed]'
+                 } ${isSidebarOpen ? 'py-2.5 px-3' : 'h-[48px] w-[48px] justify-center px-0 mx-auto'}`}
+                 title={session.title || 'Engineering Workspace'}
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 shrink-0 text-slate-400">
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z" />
+                 </svg>
+                 <span className={`whitespace-nowrap truncate transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>
+                   {session.title || 'Engineering Workspace'}
+                 </span>
+               </button>
+             ))
+           )}
+        </div>
+
+        {/* User / Settings Footer */}
+        <div className="p-3 shrink-0">
+          <button onClick={handleLogout} className={`w-full flex items-center rounded-full transition-colors overflow-hidden text-slate-600 hover:bg-[#e8eaed] ${
+            isSidebarOpen ? 'py-2.5 px-3' : 'h-[48px] w-[48px] justify-center px-0 mx-auto'
+          }`}>
+            <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center text-white text-xs shrink-0">
+              U
+            </div>
+            <span className={`whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'ml-3 opacity-100' : 'w-0 opacity-0 ml-0'}`}>Sign out</span>
+          </button>
         </div>
       </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
       <main className="flex-1 flex flex-col relative h-full min-w-0 transition-all duration-300">
         
-        {/* Top spacing to account for fixed hamburger on mobile/desktop */}
+        {/* Mobile top spacing placeholder (when sidebar is hidden) */}
         <div className="h-[72px] shrink-0 w-full flex items-center md:hidden pl-[72px]">
            {!isSidebarOpen && <span className="text-xl font-medium text-slate-600 tracking-wide select-none">CivilGPT</span>}
         </div>
@@ -434,7 +458,7 @@ export default function Chat() {
         {activeTab === 'calculator' && (
           <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
             <div className="max-w-4xl mx-auto w-full">
-              <div className="bg-white border border-slate-200 rounded-[32px] p-8 md:p-10 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-[32px] p-8 md:p-10 shadow-sm mt-12 md:mt-4">
                 <div className="mb-8">
                   <h2 className="text-3xl font-medium text-slate-800 tracking-tight">Mix Design Calculator</h2>
                   <p className="text-slate-500 mt-2 text-[15px]">IS 10262:2019 Absolute Volume Method</p>

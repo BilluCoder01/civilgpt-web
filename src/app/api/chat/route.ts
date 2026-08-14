@@ -151,13 +151,27 @@ export async function POST(req: Request) {
       messages,
       system: systemPrompt,
       onFinish: async ({ text }) => {
-        // Once the AI finishes streaming the response to the user, save it to their memory
+        // Save the AI response
         if (sessionId) {
           await supabaseAdmin.from('messages').insert([{
             session_id: sessionId,
             role: 'assistant',
             content: text
           }]);
+
+          // OPTIONAL: Auto-generate title if it's the first exchange
+          const { data: msgCount } = await supabaseAdmin
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('session_id', sessionId);
+
+          if (msgCount && msgCount < 3) {
+            const shortTitle = latestMessage.substring(0, 25) + "...";
+            await supabaseAdmin
+              .from('chat_sessions')
+              .update({ title: shortTitle })
+              .eq('id', sessionId);
+          }
         }
       }
     });

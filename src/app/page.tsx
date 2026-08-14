@@ -151,9 +151,27 @@ export default function Chat() {
     router.push('/login');
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
+    // 1. Create a new session in Supabase immediately
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: newSession } = await supabase
+      .from('chat_sessions')
+      .insert([{ 
+        user_id: user.id, 
+        title: 'New Engineering Chat' 
+      }])
+      .select()
+      .single();
+
+    if (newSession) {
+      // 2. Add it to local state so it appears instantly
+      setSessions([newSession, ...sessions]);
+      setActiveSessionId(newSession.id);
+    }
+
     setMessages([]);
-    setActiveSessionId(null);
     setActiveTab('chat');
     if (window.innerWidth < 768) setIsSidebarOpen(false);
   };

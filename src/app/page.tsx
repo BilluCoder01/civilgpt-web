@@ -70,6 +70,8 @@ export default function Chat() {
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState<'chat' | 'calculator'>('chat');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // NEW: Sidebar Mobile State
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [myInput, setMyInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -129,6 +131,12 @@ export default function Chat() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
+  };
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setActiveTab('chat');
+    setIsSidebarOpen(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,18 +235,42 @@ export default function Chat() {
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
       
+      {/* --- MOBILE OVERLAY --- */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity" 
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* --- COLUMN 1: LEFT SIDEBAR --- */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col hidden md:flex flex-shrink-0">
-        <div className="p-4 flex items-center gap-3 border-b border-slate-800">
-          <span className="text-2xl">🏗️</span>
-          <h1 className="text-xl font-bold tracking-wide text-white">Civil<span className="text-amber-500">GPT</span></h1>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-4 flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏗️</span>
+            <h1 className="text-xl font-bold tracking-wide text-white">Civil<span className="text-amber-500">GPT</span></h1>
+          </div>
+          <button className="md:hidden p-1 text-slate-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}>
+            ✕
+          </button>
         </div>
         
         <div className="flex-1 p-4 space-y-2 overflow-y-auto">
+          
+          <button 
+            onClick={handleNewChat}
+            className="w-full text-left text-sm py-3 px-4 mb-4 rounded-xl transition-all flex items-center gap-3 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Chat
+          </button>
+
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Tools</h3>
           
           <button 
-            onClick={() => setActiveTab('chat')}
+            onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }}
             className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-all flex items-center gap-3 ${activeTab === 'chat' ? 'bg-amber-500 text-white shadow-md' : 'hover:bg-slate-800'}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -248,7 +280,7 @@ export default function Chat() {
           </button>
           
           <button 
-            onClick={() => setActiveTab('calculator')}
+            onClick={() => { setActiveTab('calculator'); setIsSidebarOpen(false); }}
             className={`w-full text-left text-sm py-3 px-4 rounded-xl transition-all flex items-center gap-3 ${activeTab === 'calculator' ? 'bg-amber-500 text-white shadow-md' : 'hover:bg-slate-800'}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -271,10 +303,21 @@ export default function Chat() {
       {/* --- COLUMN 2: CENTER VIEWPORT --- */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 relative shadow-2xl z-10">
         
+        {/* NEW MOBILE HEADER WITH HAMBURGER */}
         <header className="md:hidden bg-slate-900 text-white py-4 px-6 shadow-md flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🏗️</span>
-            <h1 className="text-lg font-bold tracking-wide">Civil<span className="text-amber-500">GPT</span></h1>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="p-1 hover:text-amber-500 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🏗️</span>
+              <h1 className="text-lg font-bold tracking-wide">Civil<span className="text-amber-500">GPT</span></h1>
+            </div>
           </div>
         </header>
 
@@ -336,6 +379,7 @@ export default function Chat() {
 
         {activeTab === 'calculator' && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 w-full max-w-5xl mx-auto">
+            {/* ... Calculator UI remains the same ... */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
               <div className="border-b border-slate-200 pb-5 mb-8">
                 <h2 className="text-2xl font-bold text-slate-900">Concrete Mix Design Calculator</h2>

@@ -64,35 +64,61 @@ const MessageBubble = memo(({ m, isTyping }: { m: Message; isTyping?: boolean })
 });
 MessageBubble.displayName = 'MessageBubble';
 
-
 // --- MAIN APP COMPONENT ---
 export default function Chat() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Navigation State
   const [activeTab, setActiveTab] = useState<'chat' | 'calculator'>('chat');
-
-  // Chat States
   const [messages, setMessages] = useState<Message[]>([]);
   const [myInput, setMyInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(true);
   
-  // Calculator States
   const [fck, setFck] = useState<number>(25);
   const [stdDev, setStdDev] = useState<number>(4);
   const [wcRatio, setWcRatio] = useState<number>(0.50);
   const [sgCement, setSgCement] = useState<number>(3.15);
   const [sgFA, setSgFA] = useState<number>(2.74);
   const [sgCA, setSgCA] = useState<number>(2.74);
-  const [waterContent, setWaterContent] = useState<number>(186); // kg/m3
+  const [waterContent, setWaterContent] = useState<number>(186); 
   const [mixResult, setMixResult] = useState<any>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // --- MEMORY LOADER ---
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: sessions } = await supabase
+        .from('chat_sessions')
+        .select('id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (sessions && sessions.length > 0) {
+        const { data: dbMessages } = await supabase
+          .from('messages')
+          .select('id, role, content')
+          .eq('session_id', sessions[0].id)
+          .order('created_at', { ascending: true });
+
+        if (dbMessages) {
+          setMessages(dbMessages as Message[]);
+        }
+      }
+      setIsFetchingHistory(false);
+    };
+
+    loadChatHistory();
+  }, [supabase]);
 
   useEffect(() => {
     if (activeTab === 'chat') {
@@ -115,13 +141,10 @@ export default function Chat() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/chat', { 
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/api/chat', { method: 'POST', body: formData });
       if (!res.ok) throw new Error(await res.text());
       setUploadedFiles(prev => [...new Set([...prev, file.name])]);
-      setUploadStatus({ type: 'success', message: 'Document added to memory.' });
+      setUploadStatus({ type: 'success', message: 'Document added to secure memory.' });
       setTimeout(() => setUploadStatus(null), 5000);
     } catch (error: any) {
       let errorMsg = error.message;
@@ -179,28 +202,15 @@ export default function Chat() {
     }
   };
 
-  // --- MIX CALCULATOR LOGIC ---
   const calculateMix = () => {
-    // 1. Target Mean Strength
     const targetStrength = fck + 1.65 * stdDev;
-    
-    // 2. Cement Content
     const cement = waterContent / wcRatio;
-
-    // 3. Absolute Volume Method
     const volCement = cement / (sgCement * 1000);
     const volWater = waterContent / 1000;
-    
-    // Assuming 2% entrapped air for 20mm aggregate
     const airVolume = 0.02; 
-    
-    // Volume available for aggregates
     const volAggregates = 1 - (volCement + volWater + airVolume);
-
-    // Assuming CA is 60% and FA is 40% of total aggregate volume (Standard assumption for Zone II)
     const volCA = volAggregates * 0.60;
     const volFA = volAggregates * 0.40;
-
     const massCA = volCA * sgCA * 1000;
     const massFA = volFA * sgFA * 1000;
 
@@ -268,13 +278,15 @@ export default function Chat() {
           </div>
         </header>
 
-        {/* ------------------------------- */}
-        {/* VIEW 1: CHAT INTERFACE          */}
-        {/* ------------------------------- */}
         {activeTab === 'chat' && (
           <>
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-4xl mx-auto space-y-6">
-              {messages.length === 0 && (
+              
+              {isFetchingHistory ? (
+                <div className="flex items-center justify-center h-full">
+                  <span className="animate-spin text-4xl text-amber-500">⏳</span>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-slate-500">
                   <div className="w-20 h-20 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-4xl shadow-sm">
                     📐
@@ -282,11 +294,11 @@ export default function Chat() {
                   <h2 className="text-2xl font-semibold text-slate-700">Ready to design.</h2>
                   <p className="max-w-md">Ask CivilGPT about structural analysis, load calculations, or upload codes to memorize.</p>
                 </div>
+              ) : (
+                messages.map((m, index) => (
+                  <MessageBubble key={m.id} m={m} isTyping={isLoading && index === messages.length - 1 && m.role === 'assistant'} />
+                ))
               )}
-
-              {messages.map((m, index) => (
-                <MessageBubble key={m.id} m={m} isTyping={isLoading && index === messages.length - 1 && m.role === 'assistant'} />
-              ))}
               <div ref={messagesEndRef} />
             </div>
 
@@ -312,17 +324,16 @@ export default function Chat() {
                   {isUploading ? "⏳" : "📎"}
                 </button>
                 <textarea className="w-full bg-transparent text-slate-900 rounded-2xl pl-14 pr-14 py-4 focus:outline-none resize-none min-h-[56px] max-h-[200px]" rows={1} value={myInput} placeholder="Type your engineering query here..." onChange={(e) => setMyInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); customHandleSubmit(); } }} disabled={isLoading} />
-                <button type="submit" disabled={myInput.trim() === "" || isLoading} className="absolute right-2 bg-amber-500 text-white p-2.5 rounded-xl hover:bg-amber-600 transition-colors h-10 w-10 bottom-2">
-                  ▲
+                <button type="submit" disabled={myInput.trim() === "" || isLoading} className="absolute right-2 bg-amber-500 text-white p-2.5 rounded-xl hover:bg-amber-600 transition-colors h-10 w-10 bottom-2 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                  </svg>
                 </button>
               </form>
             </div>
           </>
         )}
 
-        {/* ------------------------------- */}
-        {/* VIEW 2: CALCULATOR INTERFACE    */}
-        {/* ------------------------------- */}
         {activeTab === 'calculator' && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 w-full max-w-5xl mx-auto">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8">

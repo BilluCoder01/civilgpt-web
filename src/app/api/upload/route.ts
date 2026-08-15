@@ -52,8 +52,7 @@ export async function POST(req: Request) {
     if (chunks.length === 0) return NextResponse.json({ error: "No text found" }, { status: 400 });
 
     const { embeddings } = await embedMany({
-      // @ts-ignore
-      model: google.textEmbeddingModel('gemini-embedding-001', { outputDimensionality: 768 }),
+      model: google.textEmbeddingModel('text-embedding-004'),
       values: chunks,
     });
 

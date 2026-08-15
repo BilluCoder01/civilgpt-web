@@ -61,9 +61,9 @@ export async function POST(req: Request) {
       }]);
     }
 
-    // Embed message using standard model configuration
+    // THE FIX: Using the active 2026 embedding model
     const { embedding } = await embed({
-      model: google.textEmbeddingModel('text-embedding-004'),
+      model: google.textEmbeddingModel('gemini-embedding-2'),
       value: latestMessage,
     });
 

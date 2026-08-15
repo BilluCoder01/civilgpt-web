@@ -51,8 +51,9 @@ export async function POST(req: Request) {
     for (let i = 0; i < cleanText.length; i += 1000) chunks.push(cleanText.substring(i, i + 1000));
     if (chunks.length === 0) return NextResponse.json({ error: "No text found" }, { status: 400 });
 
+    // THE FIX: Using the active 2026 embedding model
     const { embeddings } = await embedMany({
-      model: google.textEmbeddingModel('text-embedding-004'),
+      model: google.textEmbeddingModel('gemini-embedding-2'),
       values: chunks,
     });
 

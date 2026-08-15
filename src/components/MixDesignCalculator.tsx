@@ -19,43 +19,34 @@ export default function MixDesignCalculator({
   isDarkMode,
 }: MixDesignCalculatorProps) {
   // ============================================================
-  // EXISTING CALCULATOR VALUES
+  // 1. DESIGN STIPULATIONS
+  // Defaults are based on the IS 10262:2019 Annex A M40
+  // illustrative example.
   // ============================================================
 
-  const [fck, setFck] = useState<number>(25);
-  const [stdDev, setStdDev] = useState<number>(4);
-  const [wcRatio, setWcRatio] = useState<number>(0.5);
-
-  const [sgCement, setSgCement] =
-    useState<number>(3.15);
-
-  const [sgFA, setSgFA] =
-    useState<number>(2.74);
-
-  const [sgCA, setSgCA] =
-    useState<number>(2.74);
-
-  const [waterContent, setWaterContent] =
-    useState<number>(186);
-
-  // ============================================================
-  // NEW DESIGN STIPULATION INPUTS
-  // ============================================================
+  const [fck, setFck] =
+    useState<number>(40);
 
   const [cementType, setCementType] =
-    useState<string>("OPC");
+    useState<string>("PPC");
+
+  const [cementGrade, setCementGrade] =
+    useState<string>("Actual strength / Curve 2");
 
   const [maxAggregateSize, setMaxAggregateSize] =
     useState<number>(20);
 
   const [exposureCondition, setExposureCondition] =
-    useState<string>("Moderate");
+    useState<string>("Severe");
 
   const [slump, setSlump] =
     useState<number>(75);
 
+  const [transportationTime, setTransportationTime] =
+    useState<number>(0);
+
   const [placingMethod, setPlacingMethod] =
-    useState<string>("Normal");
+    useState<string>("Chute / Non-pumpable");
 
   const [siteControl, setSiteControl] =
     useState<string>("Good");
@@ -63,15 +54,41 @@ export default function MixDesignCalculator({
   const [aggregateType, setAggregateType] =
     useState<string>("Crushed Angular");
 
-  const [admixtureType, setAdmixtureType] =
-    useState<string>("None");
+  // Fine aggregate type is separate from fine aggregate
+  // grading zone.
+  const [fineAggregateType, setFineAggregateType] =
+    useState<string>("Natural Sand");
+
+  // ------------------------------------------------------------
+  // IMPORTANT:
+  // This is the grading zone of the FINE AGGREGATE according
+  // to IS 383, which is used by Table 5 of IS 10262.
+  // ------------------------------------------------------------
+
+  const [fineAggregateZone, setFineAggregateZone] =
+    useState<string>("Zone II");
+
+  const [chemicalAdmixture, setChemicalAdmixture] =
+    useState<string>("Superplasticizer - Normal");
 
   const [mineralAdmixture, setMineralAdmixture] =
     useState<string>("None");
 
+  const [earlyAgeRequirement, setEarlyAgeRequirement] =
+    useState<string>("None");
+
   // ============================================================
-  // NEW MATERIAL PROPERTY INPUTS
+  // 2. MATERIAL PROPERTIES
   // ============================================================
+
+  const [sgCement, setSgCement] =
+    useState<number>(2.88);
+
+  const [sgFA, setSgFA] =
+    useState<number>(2.65);
+
+  const [sgCA, setSgCA] =
+    useState<number>(2.74);
 
   const [faAbsorption, setFaAbsorption] =
     useState<number>(1.0);
@@ -85,11 +102,11 @@ export default function MixDesignCalculator({
   const [caMoisture, setCaMoisture] =
     useState<number>(0);
 
-  const [admixtureSG, setAdmixtureSG] =
-    useState<number>(1.10);
+  const [chemicalAdmixtureSG, setChemicalAdmixtureSG] =
+    useState<number>(1.145);
 
-  const [admixtureDosage, setAdmixtureDosage] =
-    useState<number>(0);
+  const [chemicalAdmixtureDosage, setChemicalAdmixtureDosage] =
+    useState<number>(1.0);
 
   const [mineralAdmixtureSG, setMineralAdmixtureSG] =
     useState<number>(2.90);
@@ -98,84 +115,126 @@ export default function MixDesignCalculator({
     useState<number>(0);
 
   // ============================================================
-  // NEW DURABILITY / LIMIT INPUTS
+  // 3. DURABILITY / DESIGN LIMITS
   // ============================================================
 
-  const [maxWcRatio, setMaxWcRatio] =
-    useState<number>(0.50);
+  // For the Annex A benchmark this is initially the selected
+  // free water-cement ratio.
+  const [waterCementRatio, setWaterCementRatio] =
+    useState<number>(0.36);
 
-  const [minCementContent, setMinCementContent] =
-    useState<number>(300);
+  const [maximumWaterCementRatio, setMaximumWaterCementRatio] =
+    useState<number>(0.45);
 
-  const [maxCementContent, setMaxCementContent] =
+  const [minimumCementContent, setMinimumCementContent] =
+    useState<number>(320);
+
+  const [maximumCementContent, setMaximumCementContent] =
     useState<number>(450);
 
-  const [airContent, setAirContent] =
-    useState<number>(2);
+  // IS 10262 Table 3 gives 1.0% entrapped air for 20 mm
+  // nominal maximum size under normal non-air-entrained
+  // conditions.
+  const [entrappedAir, setEntrappedAir] =
+    useState<number>(1.0);
 
   // ============================================================
-  // RESULT
+  // 4. CURRENT CALCULATION VALUES
+  //
+  // These are retained temporarily so we do not silently change
+  // the calculation engine before the next implementation stage.
   // ============================================================
+
+  const [standardDeviation, setStandardDeviation] =
+    useState<number>(5.0);
+
+  const [waterContent, setWaterContent] =
+    useState<number>(148);
 
   const [mixResult, setMixResult] =
     useState<MixResult | null>(null);
 
   // ============================================================
-  // CURRENT CALCULATION
+  // CALCULATE
   // ============================================================
   // IMPORTANT:
-  // These calculations are intentionally kept compatible with
-  // the existing calculator for now.
+  // This calculation is still the transitional calculation.
   //
-  // The newly-added inputs are UI/data fields only at this stage.
-  // We will connect them to the actual IS 10262 workflow next.
+  // The next stage will replace it with the actual IS 10262
+  // procedure, including:
+  //
+  // - Table 1 target-strength factor
+  // - Table 2 assumed standard deviation
+  // - Table 3 entrapped air
+  // - Fig. 1 preliminary w/c selection
+  // - IS 456 durability check
+  // - Table 4 water content
+  // - admixture-based water reduction
+  // - Table 5 zone-based CA proportion
+  // - absolute-volume aggregate calculation
+  // - moisture/absorption correction
+  // - SSD/dry aggregate reporting
   // ============================================================
 
   const calculateMix = () => {
     if (
-      wcRatio <= 0 ||
+      waterCementRatio <= 0 ||
       sgCement <= 0 ||
       sgFA <= 0 ||
       sgCA <= 0 ||
-      waterContent < 0
+      waterContent <= 0
     ) {
       setMixResult(null);
       return;
     }
 
     const targetStrength =
-      fck + 1.65 * stdDev;
+      fck +
+      1.65 *
+        standardDeviation;
 
     const cement =
-      waterContent / wcRatio;
+      waterContent /
+      waterCementRatio;
 
-    const volCement =
+    const cementVolume =
       cement /
       (sgCement * 1000);
 
-    const volWater =
-      waterContent / 1000;
+    const waterVolume =
+      waterContent /
+      1000;
 
-    const volAir =
-      airContent / 100;
+    const airVolume =
+      entrappedAir / 100;
 
-    const volAggregates =
+    const aggregateVolume =
       1 -
-      (volCement +
-        volWater +
-        volAir);
+      (
+        cementVolume +
+        waterVolume +
+        airVolume
+      );
 
-    const volCA =
-      volAggregates * 0.60;
+    // Temporary calculation only.
+    // The final implementation will use Table 5 and the
+    // selected fine aggregate zone.
+    const coarseAggregateVolume =
+      aggregateVolume * 0.60;
 
-    const volFA =
-      volAggregates * 0.40;
+    const fineAggregateVolume =
+      aggregateVolume *
+      0.40;
 
-    const massCA =
-      volCA * sgCA * 1000;
+    const coarseAggregateMass =
+      coarseAggregateVolume *
+      sgCA *
+      1000;
 
-    const massFA =
-      volFA * sgFA * 1000;
+    const fineAggregateMass =
+      fineAggregateVolume *
+      sgFA *
+      1000;
 
     setMixResult({
       targetStrength:
@@ -188,55 +247,59 @@ export default function MixDesignCalculator({
         waterContent.toFixed(2),
 
       fa:
-        massFA.toFixed(2),
+        fineAggregateMass.toFixed(2),
 
       ca:
-        massCA.toFixed(2),
+        coarseAggregateMass.toFixed(2),
 
       ratio:
-        `1 : ${(massFA / cement).toFixed(
+        `1 : ${(fineAggregateMass / cement).toFixed(
           2
-        )} : ${(massCA / cement).toFixed(
+        )} : ${(coarseAggregateMass / cement).toFixed(
           2
         )}`,
     });
   };
 
   // ============================================================
-  // COMMON STYLES
+  // STYLES
   // ============================================================
 
-  const labelClass = `block text-[13px] font-medium mb-1.5 ${
-    isDarkMode
-      ? "text-slate-300"
-      : "text-slate-700"
-  }`;
+  const labelClass =
+    `block text-[13px] font-medium mb-1.5 ${
+      isDarkMode
+        ? "text-slate-300"
+        : "text-slate-700"
+    }`;
 
-  const inputClass = `w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
-    isDarkMode
-      ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
-      : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
-  }`;
+  const inputClass =
+    `w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
+      isDarkMode
+        ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
+        : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
+    }`;
 
-  const sectionTitleClass = `text-[12px] font-semibold uppercase tracking-wider mb-4 ${
-    isDarkMode
-      ? "text-slate-500"
-      : "text-slate-500"
-  }`;
+  const sectionTitleClass =
+    `text-[12px] font-semibold uppercase tracking-wider mb-4 ${
+      isDarkMode
+        ? "text-slate-500"
+        : "text-slate-500"
+    }`;
 
-  const sectionClass = `rounded-[24px] border p-6 ${
-    isDarkMode
-      ? "bg-[#131314] border-slate-800"
-      : "bg-[#f8fafc] border-slate-200"
-  }`;
+  const sectionClass =
+    `rounded-[24px] border p-6 ${
+      isDarkMode
+        ? "bg-[#131314] border-slate-800"
+        : "bg-[#f8fafc] border-slate-200"
+    }`;
 
   return (
     <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
       <div className="max-w-5xl mx-auto w-full">
 
-        {/* ==================================================== */}
-        {/* HEADER                                                */}
-        {/* ==================================================== */}
+        {/* ================================================== */}
+        {/* HEADER                                            */}
+        {/* ================================================== */}
 
         <div
           className={`border rounded-[32px] p-8 md:p-10 shadow-sm mt-8 md:mt-2 transition-colors ${
@@ -279,7 +342,6 @@ export default function MixDesignCalculator({
             <div
               className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ${sectionClass}`}
             >
-              {/* Grade */}
               <div>
                 <label className={labelClass}>
                   Concrete Grade
@@ -299,35 +361,42 @@ export default function MixDesignCalculator({
                   <option value={20}>
                     M20
                   </option>
+
                   <option value={25}>
                     M25
                   </option>
+
                   <option value={30}>
                     M30
                   </option>
+
                   <option value={35}>
                     M35
                   </option>
+
                   <option value={40}>
                     M40
                   </option>
+
                   <option value={45}>
                     M45
                   </option>
+
                   <option value={50}>
                     M50
                   </option>
                 </select>
               </div>
 
-              {/* Cement */}
               <div>
                 <label className={labelClass}>
                   Cement Type
                 </label>
 
                 <select
-                  value={cementType}
+                  value={
+                    cementType
+                  }
                   onChange={(e) =>
                     setCementType(
                       e.target.value
@@ -338,22 +407,54 @@ export default function MixDesignCalculator({
                   <option value="OPC">
                     OPC
                   </option>
+
                   <option value="PPC">
                     PPC
                   </option>
+
                   <option value="PSC">
                     PSC
-                  </option>
-                  <option value="Other">
-                    Other
                   </option>
                 </select>
               </div>
 
-              {/* Aggregate Size */}
               <div>
                 <label className={labelClass}>
-                  Max Aggregate Size
+                  Cement Strength Basis
+                </label>
+
+                <select
+                  value={
+                    cementGrade
+                  }
+                  onChange={(e) =>
+                    setCementGrade(
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="Actual strength / Curve 2">
+                    Actual strength / Curve 2
+                  </option>
+
+                  <option value="OPC 33">
+                    OPC 33
+                  </option>
+
+                  <option value="OPC 43">
+                    OPC 43
+                  </option>
+
+                  <option value="OPC 53">
+                    OPC 53
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  Maximum Aggregate Size
                 </label>
 
                 <select
@@ -372,19 +473,17 @@ export default function MixDesignCalculator({
                   <option value={10}>
                     10 mm
                   </option>
-                  <option value={12.5}>
-                    12.5 mm
-                  </option>
+
                   <option value={20}>
                     20 mm
                   </option>
+
                   <option value={40}>
                     40 mm
                   </option>
                 </select>
               </div>
 
-              {/* Exposure */}
               <div>
                 <label className={labelClass}>
                   Exposure Condition
@@ -404,25 +503,28 @@ export default function MixDesignCalculator({
                   <option value="Mild">
                     Mild
                   </option>
+
                   <option value="Moderate">
                     Moderate
                   </option>
+
                   <option value="Severe">
                     Severe
                   </option>
+
                   <option value="Very Severe">
                     Very Severe
                   </option>
+
                   <option value="Extreme">
                     Extreme
                   </option>
                 </select>
               </div>
 
-              {/* Slump */}
               <div>
                 <label className={labelClass}>
-                  Slump / Workability (mm)
+                  Slump at Placement (mm)
                 </label>
 
                 <input
@@ -440,10 +542,31 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Placing Method */}
               <div>
                 <label className={labelClass}>
-                  Placing Method
+                  Transportation Time (min)
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    transportationTime
+                  }
+                  onChange={(e) =>
+                    setTransportationTime(
+                      Number(
+                        e.target.value
+                      )
+                    )
+                  }
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  Method of Placing
                 </label>
 
                 <select
@@ -457,29 +580,25 @@ export default function MixDesignCalculator({
                   }
                   className={inputClass}
                 >
-                  <option value="Normal">
-                    Normal
+                  <option value="Chute / Non-pumpable">
+                    Chute / Non-pumpable
                   </option>
-                  <option value="Pump">
-                    Pumped
-                  </option>
-                  <option value="Trunk">
-                    Chute / Trunk
-                  </option>
-                  <option value="Manual">
-                    Manual
+
+                  <option value="Pumping">
+                    Pumping
                   </option>
                 </select>
               </div>
 
-              {/* Site Control */}
               <div>
                 <label className={labelClass}>
                   Degree of Site Control
                 </label>
 
                 <select
-                  value={siteControl}
+                  value={
+                    siteControl
+                  }
                   onChange={(e) =>
                     setSiteControl(
                       e.target.value
@@ -490,19 +609,16 @@ export default function MixDesignCalculator({
                   <option value="Good">
                     Good
                   </option>
+
                   <option value="Fair">
                     Fair
-                  </option>
-                  <option value="Poor">
-                    Poor
                   </option>
                 </select>
               </div>
 
-              {/* Aggregate Type */}
               <div>
                 <label className={labelClass}>
-                  Aggregate Type
+                  Coarse Aggregate Type
                 </label>
 
                 <select
@@ -519,16 +635,112 @@ export default function MixDesignCalculator({
                   <option value="Crushed Angular">
                     Crushed Angular
                   </option>
-                  <option value="Crushed Rounded">
-                    Crushed Rounded
+
+                  <option value="Sub-angular">
+                    Sub-angular
                   </option>
-                  <option value="Natural Rounded">
-                    Natural Rounded
+
+                  <option value="Gravel with some crushed particles">
+                    Gravel with some crushed particles
+                  </option>
+
+                  <option value="Rounded Gravel">
+                    Rounded Gravel
+                  </option>
+
+                  <option value="Manufactured / Other">
+                    Manufactured / Other
                   </option>
                 </select>
               </div>
 
-              {/* Chemical Admixture */}
+              <div>
+                <label className={labelClass}>
+                  Fine Aggregate Type
+                </label>
+
+                <select
+                  value={
+                    fineAggregateType
+                  }
+                  onChange={(e) =>
+                    setFineAggregateType(
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="Natural Sand">
+                    Natural Sand
+                  </option>
+
+                  <option value="Crushed Stone Sand">
+                    Crushed Stone Sand
+                  </option>
+
+                  <option value="Gravel Sand">
+                    Gravel Sand
+                  </option>
+
+                  <option value="Manufactured Sand">
+                    Manufactured Sand
+                  </option>
+
+                  <option value="Mixed Sand">
+                    Mixed Sand
+                  </option>
+                </select>
+              </div>
+
+              {/* ------------------------------------------------ */}
+              {/* NEW: FINE AGGREGATE GRADING ZONE                */}
+              {/* ------------------------------------------------ */}
+
+              <div>
+                <label className={labelClass}>
+                  Fine Aggregate Grading Zone
+                </label>
+
+                <select
+                  value={
+                    fineAggregateZone
+                  }
+                  onChange={(e) =>
+                    setFineAggregateZone(
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="Zone I">
+                    Zone I — Coarse
+                  </option>
+
+                  <option value="Zone II">
+                    Zone II — Medium
+                  </option>
+
+                  <option value="Zone III">
+                    Zone III — Fine
+                  </option>
+
+                  <option value="Zone IV">
+                    Zone IV — Very Fine
+                  </option>
+                </select>
+
+                <p
+                  className={`mt-1.5 text-[10px] ${
+                    isDarkMode
+                      ? "text-slate-600"
+                      : "text-slate-400"
+                  }`}
+                >
+                  Based on fine aggregate grading
+                  under IS 383; used with Table 5.
+                </p>
+              </div>
+
               <div>
                 <label className={labelClass}>
                   Chemical Admixture
@@ -536,10 +748,10 @@ export default function MixDesignCalculator({
 
                 <select
                   value={
-                    admixtureType
+                    chemicalAdmixture
                   }
                   onChange={(e) =>
-                    setAdmixtureType(
+                    setChemicalAdmixture(
                       e.target.value
                     )
                   }
@@ -548,22 +760,21 @@ export default function MixDesignCalculator({
                   <option value="None">
                     None
                   </option>
+
                   <option value="Plasticizer">
                     Plasticizer
                   </option>
-                  <option value="Superplasticizer">
-                    Superplasticizer
+
+                  <option value="Superplasticizer - Normal">
+                    Superplasticizer - Normal
                   </option>
-                  <option value="Retarder">
-                    Retarder
-                  </option>
-                  <option value="Accelerator">
-                    Accelerator
+
+                  <option value="Superplasticizer - High">
+                    Superplasticizer - High
                   </option>
                 </select>
               </div>
 
-              {/* Mineral Admixture */}
               <div>
                 <label className={labelClass}>
                   Mineral Admixture
@@ -583,14 +794,43 @@ export default function MixDesignCalculator({
                   <option value="None">
                     None
                   </option>
+
                   <option value="Fly Ash">
                     Fly Ash
                   </option>
+
                   <option value="GGBS">
                     GGBS
                   </option>
+
                   <option value="Silica Fume">
                     Silica Fume
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  Early Age Requirement
+                </label>
+
+                <select
+                  value={
+                    earlyAgeRequirement
+                  }
+                  onChange={(e) =>
+                    setEarlyAgeRequirement(
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="None">
+                    None
+                  </option>
+
+                  <option value="Early Strength Required">
+                    Early Strength Required
                   </option>
                 </select>
               </div>
@@ -609,7 +849,6 @@ export default function MixDesignCalculator({
             <div
               className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ${sectionClass}`}
             >
-              {/* Cement SG */}
               <div>
                 <label className={labelClass}>
                   Cement Specific Gravity
@@ -618,7 +857,9 @@ export default function MixDesignCalculator({
                 <input
                   type="number"
                   step="0.01"
-                  value={sgCement}
+                  value={
+                    sgCement
+                  }
                   onChange={(e) =>
                     setSgCement(
                       Number(
@@ -630,16 +871,17 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* FA SG */}
               <div>
                 <label className={labelClass}>
-                  Fine Aggregate SG
+                  Fine Aggregate SG (SSD)
                 </label>
 
                 <input
                   type="number"
                   step="0.01"
-                  value={sgFA}
+                  value={
+                    sgFA
+                  }
                   onChange={(e) =>
                     setSgFA(
                       Number(
@@ -651,16 +893,17 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* CA SG */}
               <div>
                 <label className={labelClass}>
-                  Coarse Aggregate SG
+                  Coarse Aggregate SG (SSD)
                 </label>
 
                 <input
                   type="number"
                   step="0.01"
-                  value={sgCA}
+                  value={
+                    sgCA
+                  }
                   onChange={(e) =>
                     setSgCA(
                       Number(
@@ -672,7 +915,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* FA Absorption */}
               <div>
                 <label className={labelClass}>
                   FA Water Absorption (%)
@@ -695,7 +937,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* CA Absorption */}
               <div>
                 <label className={labelClass}>
                   CA Water Absorption (%)
@@ -718,7 +959,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* FA Moisture */}
               <div>
                 <label className={labelClass}>
                   FA Moisture Content (%)
@@ -727,7 +967,9 @@ export default function MixDesignCalculator({
                 <input
                   type="number"
                   step="0.1"
-                  value={faMoisture}
+                  value={
+                    faMoisture
+                  }
                   onChange={(e) =>
                     setFaMoisture(
                       Number(
@@ -739,7 +981,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* CA Moisture */}
               <div>
                 <label className={labelClass}>
                   CA Moisture Content (%)
@@ -748,7 +989,9 @@ export default function MixDesignCalculator({
                 <input
                   type="number"
                   step="0.1"
-                  value={caMoisture}
+                  value={
+                    caMoisture
+                  }
                   onChange={(e) =>
                     setCaMoisture(
                       Number(
@@ -760,7 +1003,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Chemical Admixture SG */}
               <div>
                 <label className={labelClass}>
                   Chemical Admixture SG
@@ -768,12 +1010,12 @@ export default function MixDesignCalculator({
 
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.001"
                   value={
-                    admixtureSG
+                    chemicalAdmixtureSG
                   }
                   onChange={(e) =>
-                    setAdmixtureSG(
+                    setChemicalAdmixtureSG(
                       Number(
                         e.target.value
                       )
@@ -783,7 +1025,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Chemical Admixture Dosage */}
               <div>
                 <label className={labelClass}>
                   Chemical Admixture Dosage (%)
@@ -793,10 +1034,10 @@ export default function MixDesignCalculator({
                   type="number"
                   step="0.1"
                   value={
-                    admixtureDosage
+                    chemicalAdmixtureDosage
                   }
                   onChange={(e) =>
-                    setAdmixtureDosage(
+                    setChemicalAdmixtureDosage(
                       Number(
                         e.target.value
                       )
@@ -806,7 +1047,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Mineral Admixture SG */}
               <div>
                 <label className={labelClass}>
                   Mineral Admixture SG
@@ -829,7 +1069,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Mineral Admixture Dosage */}
               <div>
                 <label className={labelClass}>
                   Mineral Admixture Dosage (%)
@@ -866,18 +1105,19 @@ export default function MixDesignCalculator({
             <div
               className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 ${sectionClass}`}
             >
-              {/* Max W/C */}
               <div>
                 <label className={labelClass}>
-                  Maximum W/C Ratio
+                  Selected W/C Ratio
                 </label>
 
                 <input
                   type="number"
                   step="0.01"
-                  value={maxWcRatio}
+                  value={
+                    waterCementRatio
+                  }
                   onChange={(e) =>
-                    setMaxWcRatio(
+                    setWaterCementRatio(
                       Number(
                         e.target.value
                       )
@@ -887,7 +1127,28 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Min Cement */}
+              <div>
+                <label className={labelClass}>
+                  Maximum W/C Ratio
+                </label>
+
+                <input
+                  type="number"
+                  step="0.01"
+                  value={
+                    maximumWaterCementRatio
+                  }
+                  onChange={(e) =>
+                    setMaximumWaterCementRatio(
+                      Number(
+                        e.target.value
+                      )
+                    )
+                  }
+                  className={inputClass}
+                />
+              </div>
+
               <div>
                 <label className={labelClass}>
                   Minimum Cement (kg/m³)
@@ -897,10 +1158,10 @@ export default function MixDesignCalculator({
                   type="number"
                   step="1"
                   value={
-                    minCementContent
+                    minimumCementContent
                   }
                   onChange={(e) =>
-                    setMinCementContent(
+                    setMinimumCementContent(
                       Number(
                         e.target.value
                       )
@@ -910,7 +1171,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Max Cement */}
               <div>
                 <label className={labelClass}>
                   Maximum Cement (kg/m³)
@@ -920,10 +1180,10 @@ export default function MixDesignCalculator({
                   type="number"
                   step="1"
                   value={
-                    maxCementContent
+                    maximumCementContent
                   }
                   onChange={(e) =>
-                    setMaxCementContent(
+                    setMaximumCementContent(
                       Number(
                         e.target.value
                       )
@@ -933,7 +1193,6 @@ export default function MixDesignCalculator({
                 />
               </div>
 
-              {/* Air */}
               <div>
                 <label className={labelClass}>
                   Entrapped Air (%)
@@ -942,9 +1201,11 @@ export default function MixDesignCalculator({
                 <input
                   type="number"
                   step="0.1"
-                  value={airContent}
+                  value={
+                    entrappedAir
+                  }
                   onChange={(e) =>
-                    setAirContent(
+                    setEntrappedAir(
                       Number(
                         e.target.value
                       )
@@ -957,7 +1218,7 @@ export default function MixDesignCalculator({
           </div>
 
           {/* ================================================== */}
-          {/* CURRENT CALCULATION AREA                          */}
+          {/* CURRENT OUTPUT                                     */}
           {/* ================================================== */}
 
           <div
@@ -969,20 +1230,21 @@ export default function MixDesignCalculator({
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
 
-              {/* CURRENT CALCULATION INPUTS */}
-
               <div className="space-y-5">
+
                 <div>
                   <label className={labelClass}>
-                    Standard Deviation (s) - N/mm²
+                    Assumed Standard Deviation
                   </label>
 
                   <input
                     type="number"
                     step="0.1"
-                    value={stdDev}
+                    value={
+                      standardDeviation
+                    }
                     onChange={(e) =>
-                      setStdDev(
+                      setStandardDeviation(
                         Number(
                           e.target.value
                         )
@@ -990,35 +1252,28 @@ export default function MixDesignCalculator({
                     }
                     className={inputClass}
                   />
+
+                  <p
+                    className={`mt-1.5 text-[10px] ${
+                      isDarkMode
+                        ? "text-slate-600"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    Replace with actual established
+                    standard deviation when sufficient
+                    test data are available.
+                  </p>
                 </div>
 
                 <div>
                   <label className={labelClass}>
-                    Current Design W/C Ratio
+                    Working Water Content (kg/m³)
                   </label>
 
                   <input
                     type="number"
-                    step="0.01"
-                    value={wcRatio}
-                    onChange={(e) =>
-                      setWcRatio(
-                        Number(
-                          e.target.value
-                        )
-                      )
-                    }
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass}>
-                    Current Water Content (kg/m³)
-                  </label>
-
-                  <input
-                    type="number"
+                    step="0.1"
                     value={
                       waterContent
                     }
@@ -1031,21 +1286,39 @@ export default function MixDesignCalculator({
                     }
                     className={inputClass}
                   />
+
+                  <p
+                    className={`mt-1.5 text-[10px] ${
+                      isDarkMode
+                        ? "text-slate-600"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    Default value is from the selected
+                    Annex A benchmark; final water demand
+                    is to be verified by trials.
+                  </p>
                 </div>
 
-                <div className="rounded-[18px] border border-dashed p-4 text-[12px] leading-relaxed">
-                  <p
-                    className={
-                      isDarkMode
-                        ? "text-slate-500"
-                        : "text-slate-500"
-                    }
-                  >
-                    The new design inputs above are
-                    currently stored but are not yet
-                    connected to the calculation engine.
-                    The calculation logic will be upgraded
-                    in the next stage.
+                <div
+                  className={`rounded-[18px] border border-dashed p-4 text-[12px] leading-relaxed ${
+                    isDarkMode
+                      ? "border-slate-700 text-slate-500"
+                      : "border-slate-300 text-slate-500"
+                  }`}
+                >
+                  <p>
+                    <strong>
+                      Calculation engine status:
+                    </strong>
+                  </p>
+
+                  <p className="mt-1">
+                    The input structure now follows
+                    the data required for IS 10262:2019.
+                    The next stage will connect these
+                    values to the standard's calculation
+                    sequence.
                   </p>
                 </div>
 
@@ -1063,7 +1336,7 @@ export default function MixDesignCalculator({
                 </button>
               </div>
 
-              {/* RESULTS */}
+              {/* OUTPUT */}
 
               <div
                 className={`rounded-[24px] p-8 h-full transition-colors border ${
@@ -1140,7 +1413,10 @@ export default function MixDesignCalculator({
                             : "text-slate-800"
                         }`}
                       >
-                        {mixResult.cement} kg
+                        {
+                          mixResult.cement
+                        }{" "}
+                        kg
                       </span>
                     </div>
 
@@ -1168,7 +1444,10 @@ export default function MixDesignCalculator({
                             : "text-slate-800"
                         }`}
                       >
-                        {mixResult.water} kg
+                        {
+                          mixResult.water
+                        }{" "}
+                        kg
                       </span>
                     </div>
 
@@ -1196,7 +1475,10 @@ export default function MixDesignCalculator({
                             : "text-slate-800"
                         }`}
                       >
-                        {mixResult.fa} kg
+                        {
+                          mixResult.fa
+                        }{" "}
+                        kg
                       </span>
                     </div>
 
@@ -1224,7 +1506,10 @@ export default function MixDesignCalculator({
                             : "text-slate-800"
                         }`}
                       >
-                        {mixResult.ca} kg
+                        {
+                          mixResult.ca
+                        }{" "}
+                        kg
                       </span>
                     </div>
 
@@ -1246,7 +1531,9 @@ export default function MixDesignCalculator({
                             : "text-slate-800"
                         }`}
                       >
-                        {mixResult.ratio}
+                        {
+                          mixResult.ratio
+                        }
                       </p>
                     </div>
                   </div>
@@ -1259,7 +1546,7 @@ export default function MixDesignCalculator({
                     }`}
                   >
                     <p className="text-[14px]">
-                      Enter your design parameters
+                      Enter the design parameters
                       and click Calculate.
                     </p>
                   </div>

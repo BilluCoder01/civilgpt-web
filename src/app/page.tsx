@@ -6,18 +6,18 @@ import {
   useState,
   useMemo,
   memo,
-} from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import remarkGfm from 'remark-gfm';
-import 'katex/dist/katex.min.css';
-import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
+} from "react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import remarkGfm from "remark-gfm";
+import "katex/dist/katex.min.css";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 type Message = {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 };
 
@@ -29,7 +29,7 @@ type Session = {
 
 type UploadStatus =
   | {
-      type: 'success' | 'error';
+      type: "success" | "error";
       message: string;
     }
   | null;
@@ -48,14 +48,14 @@ const MessageBubble = memo(
     isTyping?: boolean;
     isDark: boolean;
   }) => {
-    if (m.role === 'user') {
+    if (m.role === "user") {
       return (
         <div className="flex justify-end mb-8">
           <div
             className={`${
               isDark
-                ? 'bg-[#333537] text-slate-200'
-                : 'bg-[#f0f4f9] text-slate-800'
+                ? "bg-[#333537] text-slate-200"
+                : "bg-[#f0f4f9] text-slate-800"
             } px-5 py-3 rounded-[24px] rounded-br-sm max-w-[85%] md:max-w-[70%] text-[15px] leading-relaxed shadow-sm`}
           >
             <div className="whitespace-pre-wrap">
@@ -71,8 +71,8 @@ const MessageBubble = memo(
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shrink-0 mt-1 shadow-sm border ${
             isDark
-              ? 'bg-amber-900/30 border-amber-800/50'
-              : 'bg-amber-100 border-amber-200'
+              ? "bg-amber-900/30 border-amber-800/50"
+              : "bg-amber-100 border-amber-200"
           }`}
         >
           🏗️
@@ -81,9 +81,9 @@ const MessageBubble = memo(
         <div
           className={`flex-1 max-w-[90%] md:max-w-[80%] text-[15px] leading-relaxed ${
             isDark
-              ? 'text-slate-300'
-              : 'text-slate-800'
-          } ${isTyping ? 'typing-cursor' : ''}`}
+              ? "text-slate-300"
+              : "text-slate-800"
+          } ${isTyping ? "typing-cursor" : ""}`}
         >
           <ReactMarkdown
             remarkPlugins={[
@@ -96,8 +96,8 @@ const MessageBubble = memo(
                 <h1
                   className={`text-2xl font-semibold mt-6 mb-4 ${
                     isDark
-                      ? 'text-white'
-                      : 'text-slate-900'
+                      ? "text-white"
+                      : "text-slate-900"
                   }`}
                   {...props}
                 />
@@ -107,8 +107,8 @@ const MessageBubble = memo(
                 <h2
                   className={`text-xl font-semibold mt-5 mb-3 ${
                     isDark
-                      ? 'text-white'
-                      : 'text-slate-900'
+                      ? "text-white"
+                      : "text-slate-900"
                   }`}
                   {...props}
                 />
@@ -118,8 +118,8 @@ const MessageBubble = memo(
                 <h3
                   className={`text-lg font-medium mt-4 mb-2 ${
                     isDark
-                      ? 'text-white'
-                      : 'text-slate-900'
+                      ? "text-white"
+                      : "text-slate-900"
                   }`}
                   {...props}
                 />
@@ -136,8 +136,8 @@ const MessageBubble = memo(
                 <ul
                   className={`list-disc pl-5 mb-4 space-y-1.5 ${
                     isDark
-                      ? 'marker:text-slate-600'
-                      : 'marker:text-slate-400'
+                      ? "marker:text-slate-600"
+                      : "marker:text-slate-400"
                   }`}
                   {...props}
                 />
@@ -147,8 +147,8 @@ const MessageBubble = memo(
                 <ol
                   className={`list-decimal pl-5 mb-4 space-y-1.5 ${
                     isDark
-                      ? 'marker:text-slate-600'
-                      : 'marker:text-slate-400'
+                      ? "marker:text-slate-600"
+                      : "marker:text-slate-400"
                   }`}
                   {...props}
                 />
@@ -158,8 +158,8 @@ const MessageBubble = memo(
                 <strong
                   className={`font-semibold ${
                     isDark
-                      ? 'text-white'
-                      : 'text-slate-900'
+                      ? "text-white"
+                      : "text-slate-900"
                   }`}
                   {...props}
                 />
@@ -169,8 +169,8 @@ const MessageBubble = memo(
                 <div
                   className={`overflow-x-auto my-6 rounded-2xl border ${
                     isDark
-                      ? 'border-slate-700'
-                      : 'border-slate-200'
+                      ? "border-slate-700"
+                      : "border-slate-200"
                   }`}
                 >
                   <table
@@ -184,8 +184,8 @@ const MessageBubble = memo(
                 <thead
                   className={`${
                     isDark
-                      ? 'bg-[#1e1f20] border-slate-700'
-                      : 'bg-[#f0f4f9] border-slate-200'
+                      ? "bg-[#1e1f20] border-slate-700"
+                      : "bg-[#f0f4f9] border-slate-200"
                   } border-b`}
                   {...props}
                 />
@@ -195,8 +195,8 @@ const MessageBubble = memo(
                 <th
                   className={`py-2.5 px-4 font-medium whitespace-nowrap ${
                     isDark
-                      ? 'text-slate-300'
-                      : 'text-slate-700'
+                      ? "text-slate-300"
+                      : "text-slate-700"
                   }`}
                   {...props}
                 />
@@ -206,8 +206,8 @@ const MessageBubble = memo(
                 <td
                   className={`py-2.5 px-4 border-b ${
                     isDark
-                      ? 'border-slate-700/50'
-                      : 'border-slate-100'
+                      ? "border-slate-700/50"
+                      : "border-slate-100"
                   }`}
                   {...props}
                 />
@@ -222,7 +222,7 @@ const MessageBubble = memo(
   }
 );
 
-MessageBubble.displayName = 'MessageBubble';
+MessageBubble.displayName = "MessageBubble";
 
 // ------------------------------------------------------------
 // MAIN COMPONENT
@@ -237,7 +237,9 @@ export default function Chat() {
   );
 
   const [activeTab, setActiveTab] =
-    useState<'chat' | 'calculator'>('chat');
+    useState<"chat" | "calculator">(
+      "chat"
+    );
 
   const [isSidebarOpen, setIsSidebarOpen] =
     useState(true);
@@ -251,9 +253,7 @@ export default function Chat() {
   const [sessions, setSessions] =
     useState<Session[]>([]);
 
-  // IMPORTANT:
-  // null means the user is currently on a fresh,
-  // unsaved chat.
+  // null = fresh unsaved chat
   const [activeSessionId, setActiveSessionId] =
     useState<string | null>(null);
 
@@ -261,7 +261,7 @@ export default function Chat() {
     useState<Message[]>([]);
 
   const [myInput, setMyInput] =
-    useState('');
+    useState("");
 
   const [isLoading, setIsLoading] =
     useState(false);
@@ -275,7 +275,17 @@ export default function Chat() {
   const [isFetchingHistory, setIsFetchingHistory] =
     useState(true);
 
-  // Calculator state
+  // ------------------------------------------------------------
+  // NEW PDF ATTACHMENT STATE
+  // ------------------------------------------------------------
+
+  const [uploadedPdfName, setUploadedPdfName] =
+    useState<string | null>(null);
+
+  // ------------------------------------------------------------
+  // CALCULATOR STATE
+  // ------------------------------------------------------------
+
   const [fck, setFck] =
     useState<number>(25);
 
@@ -306,8 +316,8 @@ export default function Chat() {
   const messagesEndRef =
     useRef<HTMLDivElement>(null);
 
-  // Used to make sure an old session-loading request
-  // cannot overwrite a newer session selection.
+  // Prevent an older session request from
+  // overwriting a newer session.
   const sessionLoadRef =
     useRef(0);
 
@@ -327,26 +337,24 @@ export default function Chat() {
     handleResize();
 
     window.addEventListener(
-      'resize',
+      "resize",
       handleResize
     );
 
     return () => {
       window.removeEventListener(
-        'resize',
+        "resize",
         handleResize
       );
     };
   }, []);
 
   // ------------------------------------------------------------
-  // INITIAL LOAD
-  //
-  // IMPORTANT:
-  // We ONLY load the session list here.
-  //
-  // We DO NOT automatically open the most recent chat.
-  // The user starts with a fresh unsaved chat.
+  // INITIAL HISTORY LOAD
+  // ------------------------------------------------------------
+  // We load the list of chats but intentionally do NOT
+  // open the newest one.
+  // The user starts with a blank unsaved chat.
   // ------------------------------------------------------------
 
   useEffect(() => {
@@ -358,7 +366,8 @@ export default function Chat() {
 
         const {
           data: { user },
-        } = await supabase.auth.getUser();
+        } =
+          await supabase.auth.getUser();
 
         if (!user || cancelled) {
           if (!cancelled) {
@@ -373,16 +382,16 @@ export default function Chat() {
           error: sessionsError,
         } =
           await supabase
-            .from('chat_sessions')
+            .from("chat_sessions")
             .select(
-              'id, title, created_at'
+              "id, title, created_at"
             )
             .eq(
-              'user_id',
+              "user_id",
               user.id
             )
             .order(
-              'created_at',
+              "created_at",
               {
                 ascending: false,
               }
@@ -394,7 +403,7 @@ export default function Chat() {
 
         if (sessionsError) {
           console.error(
-            'Failed to load sessions:',
+            "Failed to load sessions:",
             sessionsError
           );
 
@@ -403,14 +412,6 @@ export default function Chat() {
 
           return;
         }
-
-        // IMPORTANT:
-        // We intentionally do NOT do:
-        //
-        // setActiveSessionId(allSessions[0].id)
-        //
-        // because the user should start with a
-        // completely fresh chat after login.
 
         setSessions(
           allSessions || []
@@ -430,7 +431,7 @@ export default function Chat() {
   }, [supabase]);
 
   // ------------------------------------------------------------
-  // LOAD SPECIFIC HISTORICAL SESSION
+  // LOAD HISTORICAL SESSION
   // ------------------------------------------------------------
 
   const loadSpecificSession =
@@ -450,14 +451,9 @@ export default function Chat() {
         setIsSidebarOpen(false);
       }
 
-      setActiveTab('chat');
-
-      setActiveSessionId(
-        sessionId
-      );
-
+      setActiveTab("chat");
+      setActiveSessionId(sessionId);
       setIsFetchingHistory(true);
-
       setMessages([]);
 
       const {
@@ -465,23 +461,21 @@ export default function Chat() {
         error,
       } =
         await supabase
-          .from('messages')
+          .from("messages")
           .select(
-            'id, role, content'
+            "id, role, content"
           )
           .eq(
-            'session_id',
+            "session_id",
             sessionId
           )
           .order(
-            'created_at',
+            "created_at",
             {
               ascending: true,
             }
           );
 
-      // If another session was selected while
-      // this request was running, ignore this result.
       if (
         requestId !==
         sessionLoadRef.current
@@ -491,7 +485,7 @@ export default function Chat() {
 
       if (error) {
         console.error(
-          'Failed to load session:',
+          "Failed to load session:",
           error
         );
 
@@ -512,11 +506,11 @@ export default function Chat() {
 
   useEffect(() => {
     if (
-      activeTab === 'chat'
+      activeTab === "chat"
     ) {
       messagesEndRef.current?.scrollIntoView(
         {
-          behavior: 'smooth',
+          behavior: "smooth",
         }
       );
     }
@@ -532,18 +526,14 @@ export default function Chat() {
   const handleLogout =
     async () => {
       await supabase.auth.signOut();
-      router.push('/login');
+      router.push("/login");
     };
 
   // ------------------------------------------------------------
   // NEW CHAT
-  //
-  // IMPORTANT:
-  // We DO NOT create a database session here.
-  //
-  // We simply move the UI into a fresh unsaved chat.
-  // The session will be created when the first message
-  // is actually sent.
+  // ------------------------------------------------------------
+  // This does not create a DB session.
+  // A DB session is created only on first message.
   // ------------------------------------------------------------
 
   const handleNewChat =
@@ -552,18 +542,17 @@ export default function Chat() {
         return;
       }
 
-      // Invalidate any session-loading request.
       sessionLoadRef.current += 1;
 
       setActiveSessionId(null);
-
       setMessages([]);
-
-      setMyInput('');
-
-      setActiveTab('chat');
-
+      setMyInput("");
+      setActiveTab("chat");
       setIsFetchingHistory(false);
+
+      // Keep the uploaded PDF visible.
+      // It remains in the user's RAG knowledge base.
+      // This is only a UI reset for the chat itself.
 
       if (
         window.innerWidth < 768
@@ -594,16 +583,16 @@ export default function Chat() {
         new FormData();
 
       formData.append(
-        'file',
+        "file",
         file
       );
 
       try {
         const res =
           await fetch(
-            '/api/upload',
+            "/api/upload",
             {
-              method: 'POST',
+              method: "POST",
               body: formData,
             }
           );
@@ -614,29 +603,31 @@ export default function Chat() {
           );
         }
 
+        // Keep the actual filename for the
+        // attachment chip above the composer.
+        setUploadedPdfName(
+          file.name
+        );
+
         setUploadStatus({
-          type: 'success',
+          type: "success",
           message:
-            'PDF Memorized.',
+            "PDF Memorized.",
         });
 
-        setTimeout(
-          () =>
-            setUploadStatus(
-              null
-            ),
-          3000
-        );
-      } catch (error) {
+        setTimeout(() => {
+          setUploadStatus(null);
+        }, 3000);
+      } catch (error: any) {
         console.error(
-          'Upload failed:',
+          "PDF upload failed:",
           error
         );
 
         setUploadStatus({
-          type: 'error',
+          type: "error",
           message:
-            'Failed to read PDF.',
+            "Failed to read PDF.",
         });
       } finally {
         setIsUploading(false);
@@ -645,9 +636,22 @@ export default function Chat() {
           fileInputRef.current
         ) {
           fileInputRef.current.value =
-            '';
+            "";
         }
       }
+    };
+
+  // ------------------------------------------------------------
+  // REMOVE PDF ATTACHMENT FROM UI
+  // ------------------------------------------------------------
+  // This does NOT delete the document from Supabase.
+  // It only hides the visual attachment chip.
+  // ------------------------------------------------------------
+
+  const removePdfAttachment =
+    () => {
+      setUploadedPdfName(null);
+      setUploadStatus(null);
     };
 
   // ------------------------------------------------------------
@@ -672,29 +676,22 @@ export default function Chat() {
         return;
       }
 
-      // Capture the currently active session.
-      //
-      // For a fresh chat this will be null.
-      // In that case we create the session below.
       let sessionId =
         activeSessionId;
 
       // --------------------------------------------------------
-      // CREATE SESSION ONLY WHEN THE USER ACTUALLY SENDS
-      // THE FIRST MESSAGE.
+      // CREATE SESSION ONLY ON FIRST MESSAGE
       // --------------------------------------------------------
 
       if (!sessionId) {
         const {
-          data: {
-            user,
-          },
+          data: { user },
         } =
           await supabase.auth.getUser();
 
         if (!user) {
           console.error(
-            'Cannot send message: user is not authenticated.'
+            "Cannot send message: user is not authenticated."
           );
 
           return;
@@ -705,19 +702,17 @@ export default function Chat() {
           error: sessionError,
         } =
           await supabase
-            .from(
-              'chat_sessions'
-            )
+            .from("chat_sessions")
             .insert([
               {
                 user_id:
                   user.id,
                 title:
-                  'New Engineering Chat',
+                  "New Engineering Chat",
               },
             ])
             .select(
-              'id, title, created_at'
+              "id, title, created_at"
             )
             .single();
 
@@ -726,18 +721,22 @@ export default function Chat() {
           !newSession
         ) {
           console.error(
-            'Failed to create chat session:',
+            "Failed to create chat session:",
             sessionError
           );
+
+          setUploadStatus({
+            type: "error",
+            message:
+              "Unable to create chat session.",
+          });
 
           return;
         }
 
-        // This new session now becomes the active session.
         sessionId =
           newSession.id;
 
-        // Put it at the top of the sidebar.
         setSessions(
           (prev) => [
             newSession,
@@ -749,20 +748,18 @@ export default function Chat() {
           newSession.id
         );
 
-        // This operation invalidates any old
-        // session-loading request.
         sessionLoadRef.current += 1;
       }
 
       // --------------------------------------------------------
-      // LOCAL USER MESSAGE
+      // CREATE LOCAL USER MESSAGE
       // --------------------------------------------------------
 
       const userMsg: Message =
         {
           id:
             crypto.randomUUID(),
-          role: 'user',
+          role: "user",
           content: input,
         };
 
@@ -775,38 +772,34 @@ export default function Chat() {
           userMsg,
           {
             id: aiMsgId,
-            role: 'assistant',
-            content: '',
+            role: "assistant",
+            content: "",
           },
         ]
       );
 
-      setMyInput('');
-
+      setMyInput("");
       setIsLoading(true);
 
       try {
         const response =
           await fetch(
-            '/api/chat',
+            "/api/chat",
             {
-              method: 'POST',
+              method: "POST",
 
               headers: {
-                'Content-Type':
-                  'application/json',
+                "Content-Type":
+                  "application/json",
               },
 
-              body: JSON.stringify(
-                {
-                  messages: [
-                    ...messages,
-                    userMsg,
-                  ],
-
-                  sessionId,
-                }
-              ),
+              body: JSON.stringify({
+                messages: [
+                  ...messages,
+                  userMsg,
+                ],
+                sessionId,
+              }),
             }
           );
 
@@ -834,7 +827,7 @@ export default function Chat() {
 
         if (!response.body) {
           throw new Error(
-            'Response body is empty.'
+            "Response body is empty."
           );
         }
 
@@ -845,7 +838,7 @@ export default function Chat() {
           new TextDecoder();
 
         let currentAiText =
-          '';
+          "";
 
         while (true) {
           const {
@@ -899,7 +892,7 @@ export default function Chat() {
             )
         );
 
-        // Update sidebar title locally.
+        // Update sidebar title.
         const shortTitle =
           input.length > 25
             ? `${input.substring(
@@ -924,7 +917,7 @@ export default function Chat() {
         );
       } catch (error) {
         console.error(
-          'Chat stream failed:',
+          "Chat stream failed:",
           error
         );
 
@@ -936,7 +929,7 @@ export default function Chat() {
                   ? {
                       ...msg,
                       content:
-                        '⚠️ Stream failed.',
+                        "⚠️ Stream failed.",
                     }
                   : msg
             )
@@ -947,7 +940,7 @@ export default function Chat() {
     };
 
   // ------------------------------------------------------------
-  // MIX DESIGN CALCULATOR
+  // CALCULATOR
   // ------------------------------------------------------------
 
   const calculateMix =
@@ -1002,27 +995,22 @@ export default function Chat() {
           targetStrength.toFixed(
             2
           ),
-
         cement:
           cement.toFixed(
             2
           ),
-
         water:
           waterContent.toFixed(
             2
           ),
-
         fa:
           massFA.toFixed(
             2
           ),
-
         ca:
           massCA.toFixed(
             2
           ),
-
         ratio:
           `1 : ${(massFA / cement).toFixed(
             2
@@ -1040,8 +1028,8 @@ export default function Chat() {
     <div
       className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${
         isDarkMode
-          ? 'bg-[#131314] text-slate-200'
-          : 'bg-white text-slate-800'
+          ? "bg-[#131314] text-slate-200"
+          : "bg-white text-slate-800"
       }`}
     >
       {/* -------------------------------------------------- */}
@@ -1056,8 +1044,8 @@ export default function Chat() {
         }
         className={`fixed top-3 left-3 z-[60] p-2.5 rounded-full transition-colors ${
           isDarkMode
-            ? 'hover:bg-[#333537] text-slate-400'
-            : 'hover:bg-[#e8eaed] text-slate-600'
+            ? "hover:bg-[#333537] text-slate-400"
+            : "hover:bg-[#e8eaed] text-slate-600"
         }`}
         aria-label="Toggle Sidebar"
       >
@@ -1095,12 +1083,12 @@ export default function Chat() {
       <aside
         className={`fixed inset-y-0 left-0 z-50 md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col ${
           isDarkMode
-            ? 'bg-[#1e1f20]'
-            : 'bg-[#f0f4f9]'
+            ? "bg-[#1e1f20]"
+            : "bg-[#f0f4f9]"
         } ${
           isSidebarOpen
-            ? 'w-[260px] translate-x-0'
-            : 'w-[260px] -translate-x-full md:translate-x-0 md:w-[64px]'
+            ? "w-[260px] translate-x-0"
+            : "w-[260px] -translate-x-full md:translate-x-0 md:w-[64px]"
         }`}
       >
         {/* HEADER */}
@@ -1111,12 +1099,12 @@ export default function Chat() {
           <span
             className={`text-[18px] font-medium tracking-wide select-none whitespace-nowrap overflow-hidden transition-all duration-300 ${
               isDarkMode
-                ? 'text-slate-300'
-                : 'text-slate-700'
+                ? "text-slate-300"
+                : "text-slate-700"
             } ${
               isSidebarOpen
-                ? 'opacity-100 max-w-[120px]'
-                : 'opacity-0 max-w-0'
+                ? "opacity-100 max-w-[120px]"
+                : "opacity-0 max-w-0"
             }`}
           >
             CivilGPT
@@ -1127,16 +1115,18 @@ export default function Chat() {
 
         <div className="px-3 py-2 shrink-0 relative group flex justify-center md:justify-start">
           <button
-            onClick={handleNewChat}
+            onClick={
+              handleNewChat
+            }
             disabled={isLoading}
             className={`flex items-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
               isDarkMode
-                ? 'bg-[#333537] hover:bg-[#444749] text-slate-200'
-                : 'bg-[#e8eaed] hover:bg-[#dce0e3] text-slate-700'
+                ? "bg-[#333537] hover:bg-[#444749] text-slate-200"
+                : "bg-[#e8eaed] hover:bg-[#dce0e3] text-slate-700"
             } ${
               isSidebarOpen
-                ? 'rounded-[16px] py-2.5 px-3.5 w-full md:w-[140px]'
-                : 'rounded-full h-[40px] w-[40px] justify-center px-0'
+                ? "rounded-[16px] py-2.5 px-3.5 w-full md:w-[140px]"
+                : "rounded-full h-[40px] w-[40px] justify-center px-0"
             }`}
           >
             <svg
@@ -1157,8 +1147,8 @@ export default function Chat() {
             <span
               className={`font-medium text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
                 isSidebarOpen
-                  ? 'ml-2.5 opacity-100 max-w-[100px]'
-                  : 'w-0 opacity-0 ml-0 max-w-0'
+                  ? "ml-2.5 opacity-100 max-w-[100px]"
+                  : "w-0 opacity-0 ml-0 max-w-0"
               }`}
             >
               New chat
@@ -1169,8 +1159,8 @@ export default function Chat() {
             <div
               className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
                 isDarkMode
-                  ? 'bg-slate-700 text-white'
-                  : 'bg-slate-800 text-white'
+                  ? "bg-slate-700 text-white"
+                  : "bg-slate-800 text-white"
               }`}
             >
               New Chat
@@ -1184,12 +1174,12 @@ export default function Chat() {
           <h3
             className={`text-[12px] font-medium px-2 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${
               isSidebarOpen
-                ? 'max-w-[100px] opacity-100'
-                : 'max-w-0 opacity-0 h-0 m-0'
+                ? "max-w-[100px] opacity-100"
+                : "max-w-0 opacity-0 h-0 m-0"
             } ${
               isDarkMode
-                ? 'text-slate-500'
-                : 'text-slate-500'
+                ? "text-slate-500"
+                : "text-slate-500"
             }`}
           >
             Tools
@@ -1200,7 +1190,7 @@ export default function Chat() {
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
               onClick={() => {
-                setActiveTab('chat');
+                setActiveTab("chat");
 
                 if (
                   window.innerWidth <
@@ -1212,17 +1202,18 @@ export default function Chat() {
                 }
               }}
               className={`flex items-center rounded-full transition-colors ${
-                activeTab === 'chat'
+                activeTab ===
+                "chat"
                   ? isDarkMode
-                    ? 'bg-[#333537] text-amber-400 font-medium'
-                    : 'bg-[#dce0e3] text-slate-900 font-medium'
+                    ? "bg-[#333537] text-amber-400 font-medium"
+                    : "bg-[#dce0e3] text-slate-900 font-medium"
                   : isDarkMode
-                  ? 'text-slate-300 hover:bg-[#333537]'
-                  : 'text-slate-700 hover:bg-[#e8eaed]'
+                  ? "text-slate-300 hover:bg-[#333537]"
+                  : "text-slate-700 hover:bg-[#e8eaed]"
               } ${
                 isSidebarOpen
-                  ? 'w-full py-2 px-3'
-                  : 'h-[40px] w-[40px] justify-center px-0'
+                  ? "w-full py-2 px-3"
+                  : "h-[40px] w-[40px] justify-center px-0"
               }`}
             >
               <span className="w-5 flex justify-center text-amber-500 shrink-0 text-sm">
@@ -1232,8 +1223,8 @@ export default function Chat() {
               <span
                 className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
                   isSidebarOpen
-                    ? 'ml-3 opacity-100 max-w-[200px]'
-                    : 'w-0 opacity-0 ml-0 max-w-0'
+                    ? "ml-3 opacity-100 max-w-[200px]"
+                    : "w-0 opacity-0 ml-0 max-w-0"
                 }`}
               >
                 AI Assistant
@@ -1244,8 +1235,8 @@ export default function Chat() {
               <div
                 className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
                   isDarkMode
-                    ? 'bg-slate-700 text-white'
-                    : 'bg-slate-800 text-white'
+                    ? "bg-slate-700 text-white"
+                    : "bg-slate-800 text-white"
                 }`}
               >
                 AI Assistant
@@ -1259,7 +1250,7 @@ export default function Chat() {
             <button
               onClick={() => {
                 setActiveTab(
-                  'calculator'
+                  "calculator"
                 );
 
                 if (
@@ -1273,17 +1264,17 @@ export default function Chat() {
               }}
               className={`flex items-center rounded-full transition-colors ${
                 activeTab ===
-                'calculator'
+                "calculator"
                   ? isDarkMode
-                    ? 'bg-[#333537] text-slate-100 font-medium'
-                    : 'bg-[#dce0e3] text-slate-900 font-medium'
+                    ? "bg-[#333537] text-slate-100 font-medium"
+                    : "bg-[#dce0e3] text-slate-900 font-medium"
                   : isDarkMode
-                  ? 'text-slate-300 hover:bg-[#333537]'
-                  : 'text-slate-700 hover:bg-[#e8eaed]'
+                  ? "text-slate-300 hover:bg-[#333537]"
+                  : "text-slate-700 hover:bg-[#e8eaed]"
               } ${
                 isSidebarOpen
-                  ? 'w-full py-2 px-3'
-                  : 'h-[40px] w-[40px] justify-center px-0'
+                  ? "w-full py-2 px-3"
+                  : "h-[40px] w-[40px] justify-center px-0"
               }`}
             >
               <span className="w-5 flex justify-center text-slate-400 shrink-0 text-sm">
@@ -1293,8 +1284,8 @@ export default function Chat() {
               <span
                 className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
                   isSidebarOpen
-                    ? 'ml-3 opacity-100 max-w-[200px]'
-                    : 'w-0 opacity-0 ml-0 max-w-0'
+                    ? "ml-3 opacity-100 max-w-[200px]"
+                    : "w-0 opacity-0 ml-0 max-w-0"
                 }`}
               >
                 Mix Calculator
@@ -1305,8 +1296,8 @@ export default function Chat() {
               <div
                 className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
                   isDarkMode
-                    ? 'bg-slate-700 text-white'
-                    : 'bg-slate-800 text-white'
+                    ? "bg-slate-700 text-white"
+                    : "bg-slate-800 text-white"
                 }`}
               >
                 Mix Calculator
@@ -1321,12 +1312,12 @@ export default function Chat() {
           <h3
             className={`text-[12px] font-medium px-2 mt-4 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${
               isSidebarOpen
-                ? 'max-w-[100px] opacity-100'
-                : 'max-w-0 opacity-0 h-0 m-0'
+                ? "max-w-[100px] opacity-100"
+                : "max-w-0 opacity-0 h-0 m-0"
             } ${
               isDarkMode
-                ? 'text-slate-500'
-                : 'text-slate-500'
+                ? "text-slate-500"
+                : "text-slate-500"
             }`}
           >
             Recent
@@ -1361,17 +1352,17 @@ export default function Chat() {
                       activeSessionId ===
                         session.id &&
                       activeTab ===
-                        'chat'
+                        "chat"
                         ? isDarkMode
-                          ? 'bg-[#333537] text-slate-200'
-                          : 'bg-[#dce0e3] text-slate-900 font-medium'
+                          ? "bg-[#333537] text-slate-200"
+                          : "bg-[#dce0e3] text-slate-900 font-medium"
                         : isDarkMode
-                        ? 'text-slate-400 hover:bg-[#333537]'
-                        : 'text-slate-600 hover:bg-[#e8eaed]'
+                        ? "text-slate-400 hover:bg-[#333537]"
+                        : "text-slate-600 hover:bg-[#e8eaed]"
                     } ${
                       isSidebarOpen
-                        ? 'w-full py-2 px-3'
-                        : 'h-[40px] w-[40px] justify-center px-0'
+                        ? "w-full py-2 px-3"
+                        : "h-[40px] w-[40px] justify-center px-0"
                     }`}
                   >
                     <svg
@@ -1394,12 +1385,12 @@ export default function Chat() {
                     <span
                       className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
                         isSidebarOpen
-                          ? 'ml-3 opacity-100 max-w-[150px]'
-                          : 'max-w-0 opacity-0 ml-0'
+                          ? "ml-3 opacity-100 max-w-[150px]"
+                          : "max-w-0 opacity-0 ml-0"
                       }`}
                     >
                       {session.title ||
-                        'Workspace'}
+                        "Workspace"}
                     </span>
                   </button>
 
@@ -1407,12 +1398,12 @@ export default function Chat() {
                     <div
                       className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
                         isDarkMode
-                          ? 'bg-slate-700 text-white'
-                          : 'bg-slate-800 text-white'
+                          ? "bg-slate-700 text-white"
+                          : "bg-slate-800 text-white"
                       }`}
                     >
                       {session.title ||
-                        'Workspace'}
+                        "Workspace"}
                     </div>
                   )}
                 </div>
@@ -1439,8 +1430,8 @@ export default function Chat() {
             <div
               className={`absolute left-full ml-2 bottom-4 w-[220px] rounded-2xl p-2 shadow-xl z-[101] border transition-colors ${
                 isDarkMode
-                  ? 'bg-[#333537] border-slate-700 text-slate-200'
-                  : 'bg-white border-slate-200 text-slate-800'
+                  ? "bg-[#333537] border-slate-700 text-slate-200"
+                  : "bg-white border-slate-200 text-slate-800"
               }`}
             >
               <div className="text-[11px] font-semibold uppercase tracking-wider mb-2 px-2 opacity-60">
@@ -1455,15 +1446,15 @@ export default function Chat() {
                 }
                 className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${
                   isDarkMode
-                    ? 'hover:bg-slate-700'
-                    : 'hover:bg-slate-100'
+                    ? "hover:bg-slate-700"
+                    : "hover:bg-slate-100"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <span className="text-[15px]">
                     {isDarkMode
-                      ? '🌙'
-                      : '☀️'}
+                      ? "🌙"
+                      : "☀️"}
                   </span>
 
                   <span className="text-[13px] font-medium">
@@ -1474,15 +1465,15 @@ export default function Chat() {
                 <div
                   className={`w-8 h-[18px] rounded-full flex items-center p-0.5 transition-colors ${
                     isDarkMode
-                      ? 'bg-amber-500'
-                      : 'bg-slate-300'
+                      ? "bg-amber-500"
+                      : "bg-slate-300"
                   }`}
                 >
                   <div
                     className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-300 ${
                       isDarkMode
-                        ? 'translate-x-[14px]'
-                        : 'translate-x-0'
+                        ? "translate-x-[14px]"
+                        : "translate-x-0"
                     }`}
                   />
                 </div>
@@ -1496,8 +1487,8 @@ export default function Chat() {
                 }
                 className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-colors ${
                   isDarkMode
-                    ? 'hover:bg-slate-700 text-rose-400'
-                    : 'hover:bg-slate-100 text-rose-500'
+                    ? "hover:bg-slate-700 text-rose-400"
+                    : "hover:bg-slate-100 text-rose-500"
                 }`}
               >
                 <svg
@@ -1531,16 +1522,16 @@ export default function Chat() {
               }
               className={`flex items-center rounded-full transition-colors ${
                 isSidebarOpen
-                  ? 'w-full py-2 px-2.5'
-                  : 'h-[40px] w-[40px] justify-center px-0'
+                  ? "w-full py-2 px-2.5"
+                  : "h-[40px] w-[40px] justify-center px-0"
               } ${
                 isSettingsOpen
                   ? isDarkMode
-                    ? 'bg-[#333537] text-slate-200'
-                    : 'bg-[#e8eaed] text-slate-900'
+                    ? "bg-[#333537] text-slate-200"
+                    : "bg-[#e8eaed] text-slate-900"
                   : isDarkMode
-                  ? 'text-slate-400 hover:bg-[#333537]'
-                  : 'text-slate-600 hover:bg-[#e8eaed]'
+                  ? "text-slate-400 hover:bg-[#333537]"
+                  : "text-slate-600 hover:bg-[#e8eaed]"
               }`}
             >
               <svg
@@ -1567,8 +1558,8 @@ export default function Chat() {
               <span
                 className={`text-[13px] font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ${
                   isSidebarOpen
-                    ? 'ml-3 opacity-100 max-w-[150px]'
-                    : 'max-w-0 opacity-0 ml-0'
+                    ? "ml-3 opacity-100 max-w-[150px]"
+                    : "max-w-0 opacity-0 ml-0"
                 }`}
               >
                 Settings
@@ -1580,8 +1571,8 @@ export default function Chat() {
                 <div
                   className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
                     isDarkMode
-                      ? 'bg-slate-700 text-white'
-                      : 'bg-slate-800 text-white'
+                      ? "bg-slate-700 text-white"
+                      : "bg-slate-800 text-white"
                   }`}
                 >
                   Settings
@@ -1601,8 +1592,8 @@ export default function Chat() {
             <span
               className={`text-[18px] font-medium tracking-wide select-none ${
                 isDarkMode
-                  ? 'text-slate-300'
-                  : 'text-slate-600'
+                  ? "text-slate-300"
+                  : "text-slate-600"
               }`}
             >
               CivilGPT
@@ -1614,7 +1605,7 @@ export default function Chat() {
         {/* CHAT */}
         {/* -------------------------------------------------- */}
 
-        {activeTab === 'chat' && (
+        {activeTab === "chat" && (
           <div className="flex-1 flex flex-col relative overflow-hidden h-full">
             <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-2 pb-32">
               <div className="max-w-3xl mx-auto w-full">
@@ -1623,8 +1614,8 @@ export default function Chat() {
                     <span
                       className={`animate-spin text-3xl ${
                         isDarkMode
-                          ? 'text-slate-700'
-                          : 'text-[#e8eaed]'
+                          ? "text-slate-700"
+                          : "text-[#e8eaed]"
                       }`}
                     >
                       ⏳
@@ -1636,8 +1627,8 @@ export default function Chat() {
                     <h2
                       className={`text-4xl font-medium tracking-tight ${
                         isDarkMode
-                          ? 'text-slate-400'
-                          : 'text-[#c4c7c5]'
+                          ? "text-slate-400"
+                          : "text-[#c4c7c5]"
                       }`}
                     >
                       Hello, Engineer.
@@ -1646,13 +1637,12 @@ export default function Chat() {
                     <p
                       className={`text-2xl font-medium max-w-xl leading-relaxed ${
                         isDarkMode
-                          ? 'text-slate-500'
-                          : 'text-[#c4c7c5]'
+                          ? "text-slate-500"
+                          : "text-[#c4c7c5]"
                       }`}
                     >
-                      How can I help you
-                      with your structural
-                      analysis today?
+                      How can I help you with your
+                      structural analysis today?
                     </p>
                   </div>
                 ) : (
@@ -1670,7 +1660,7 @@ export default function Chat() {
                             messages.length -
                               1 &&
                           m.role ===
-                            'assistant'
+                            "assistant"
                         }
                         isDark={
                           isDarkMode
@@ -1689,27 +1679,145 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* FLOATING INPUT */}
+            {/* ------------------------------------------------ */}
+            {/* FLOATING COMPOSER                               */}
+            {/* ------------------------------------------------ */}
 
             <div
               className={`absolute bottom-0 left-0 w-full pt-6 pb-6 px-4 md:px-8 bg-gradient-to-t ${
                 isDarkMode
-                  ? 'from-[#131314] via-[#131314] to-transparent'
-                  : 'from-white via-white to-transparent'
+                  ? "from-[#131314] via-[#131314] to-transparent"
+                  : "from-white via-white to-transparent"
               }`}
             >
               <div className="max-w-3xl mx-auto w-full">
+                {/* ------------------------------------------------ */}
+                {/* PDF ATTACHMENT CARD                               */}
+                {/* ------------------------------------------------ */}
+
+                {uploadedPdfName && (
+                  <div className="mb-3 flex items-center">
+                    <div
+                      className={`group inline-flex max-w-full items-center gap-3 px-3.5 py-2.5 rounded-[18px] border shadow-sm transition-all ${
+                        isDarkMode
+                          ? "bg-[#1e1f20] border-slate-700 text-slate-200"
+                          : "bg-white border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {/* PDF ICON */}
+                      <div
+                        className={`w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 ${
+                          isDarkMode
+                            ? "bg-red-900/30 text-red-400"
+                            : "bg-red-50 text-red-500"
+                        }`}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.8}
+                          className="w-[18px] h-[18px]"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.75 3.75h7.5L18.75 8.25v12a1.5 1.5 0 0 1-1.5 1.5h-10.5a1.5 1.5 0 0 1-1.5-1.5v-15a1.5 1.5 0 0 1 1.5-1.5Z"
+                          />
+
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M14.25 3.75v4.5h4.5"
+                          />
+                        </svg>
+                      </div>
+
+                      {/* FILENAME + STATUS */}
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`text-[13px] font-medium truncate max-w-[240px] md:max-w-[420px] ${
+                            isDarkMode
+                              ? "text-slate-200"
+                              : "text-slate-800"
+                          }`}
+                          title={
+                            uploadedPdfName
+                          }
+                        >
+                          {uploadedPdfName}
+                        </p>
+
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isDarkMode
+                                ? "bg-emerald-400"
+                                : "bg-emerald-500"
+                            }`}
+                          />
+
+                          <span
+                            className={`text-[11px] ${
+                              isDarkMode
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            }`}
+                          >
+                            Memorized
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* REMOVE FROM UI */}
+                      <button
+                        type="button"
+                        onClick={
+                          removePdfAttachment
+                        }
+                        disabled={
+                          isLoading
+                        }
+                        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                          isDarkMode
+                            ? "text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+                            : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        }`}
+                        aria-label="Remove PDF attachment"
+                        title="Remove attachment"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          className="w-4 h-4"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6 6l12 12M18 6 6 18"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* UPLOAD STATUS */}
                 {uploadStatus && (
                   <div
                     className={`mb-3 text-[12px] px-4 py-2 rounded-full inline-flex font-medium shadow-sm ${
                       uploadStatus.type ===
-                      'success'
+                      "success"
                         ? isDarkMode
-                          ? 'bg-emerald-900/30 text-emerald-400'
-                          : 'bg-[#e6f4ea] text-[#137333]'
+                          ? "bg-emerald-900/30 text-emerald-400"
+                          : "bg-[#e6f4ea] text-[#137333]"
                         : isDarkMode
-                        ? 'bg-red-900/30 text-red-400'
-                        : 'bg-[#fce8e6] text-[#c5221f]'
+                        ? "bg-red-900/30 text-red-400"
+                        : "bg-[#fce8e6] text-[#c5221f]"
                     }`}
                   >
                     {
@@ -1718,14 +1826,15 @@ export default function Chat() {
                   </div>
                 )}
 
+                {/* COMPOSER */}
                 <form
                   onSubmit={
                     customHandleSubmit
                   }
                   className={`relative flex items-end rounded-[32px] p-2 pr-4 transition-all focus-within:shadow-md border ${
                     isDarkMode
-                      ? 'bg-[#1e1f20] border-transparent focus-within:bg-[#333537] focus-within:border-slate-600'
-                      : 'bg-[#f0f4f9] border-transparent focus-within:bg-white focus-within:border-slate-200'
+                      ? "bg-[#1e1f20] border-transparent focus-within:bg-[#333537] focus-within:border-slate-600"
+                      : "bg-[#f0f4f9] border-transparent focus-within:bg-white focus-within:border-slate-200"
                   }`}
                 >
                   <input
@@ -1740,6 +1849,7 @@ export default function Chat() {
                     }
                   />
 
+                  {/* ATTACH / REPLACE */}
                   <button
                     type="button"
                     onClick={() =>
@@ -1751,38 +1861,42 @@ export default function Chat() {
                     }
                     className={`p-2.5 rounded-full transition-colors shrink-0 mb-0.5 ml-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                       isDarkMode
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                        ? "text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
                     }`}
-                    title="Upload IS Code PDF"
+                    title={
+                      uploadedPdfName
+                        ? "Replace PDF"
+                        : "Upload IS Code PDF"
+                    }
                   >
-                    {isUploading
-                      ? '⏳'
-                      : (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={
-                              2
-                            }
-                            stroke="currentColor"
-                            className="w-5 h-5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M12 4.5v15m7.5-7.5h-15"
-                            />
-                          </svg>
-                        )}
+                    {isUploading ? (
+                      <span className="text-sm">
+                        ⏳
+                      </span>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2}
+                        stroke="currentColor"
+                        className="w-5 h-5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 4.5v15m7.5-7.5h-15"
+                        />
+                      </svg>
+                    )}
                   </button>
 
                   <textarea
                     className={`flex-1 bg-transparent text-[15px] px-3 py-3 focus:outline-none resize-none min-h-[48px] max-h-[200px] ${
                       isDarkMode
-                        ? 'text-slate-200 placeholder-slate-500'
-                        : 'text-slate-800 placeholder-slate-500'
+                        ? "text-slate-200 placeholder-slate-500"
+                        : "text-slate-800 placeholder-slate-500"
                     }`}
                     rows={1}
                     value={
@@ -1797,7 +1911,7 @@ export default function Chat() {
                     onKeyDown={(e) => {
                       if (
                         e.key ===
-                          'Enter' &&
+                          "Enter" &&
                         !e.shiftKey
                       ) {
                         e.preventDefault();
@@ -1810,23 +1924,24 @@ export default function Chat() {
                     }
                   />
 
+                  {/* SEND */}
                   <button
                     type="submit"
                     disabled={
                       myInput.trim() ===
-                        '' ||
+                        "" ||
                       isLoading
                     }
                     className={`p-2.5 rounded-full shrink-0 mb-0.5 transition-colors ${
                       myInput.trim() ===
-                        '' ||
+                        "" ||
                       isLoading
                         ? isDarkMode
-                          ? 'text-slate-600'
-                          : 'text-slate-300'
+                          ? "text-slate-600"
+                          : "text-slate-300"
                         : isDarkMode
-                        ? 'text-amber-400 hover:bg-slate-700'
-                        : 'text-slate-800 hover:bg-slate-200/50'
+                        ? "text-amber-400 hover:bg-slate-700"
+                        : "text-slate-800 hover:bg-slate-200/50"
                     }`}
                   >
                     <svg
@@ -1843,8 +1958,8 @@ export default function Chat() {
                 <div
                   className={`text-center mt-2.5 text-[11px] ${
                     isDarkMode
-                      ? 'text-slate-500'
-                      : 'text-slate-400'
+                      ? "text-slate-500"
+                      : "text-slate-400"
                   }`}
                 >
                   CivilGPT can make mistakes.
@@ -1861,22 +1976,22 @@ export default function Chat() {
         {/* -------------------------------------------------- */}
 
         {activeTab ===
-          'calculator' && (
+          "calculator" && (
           <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
             <div className="max-w-4xl mx-auto w-full">
               <div
                 className={`border rounded-[32px] p-8 md:p-10 shadow-sm mt-8 md:mt-2 transition-colors ${
                   isDarkMode
-                    ? 'bg-[#1e1f20] border-slate-800'
-                    : 'bg-white border-slate-200'
+                    ? "bg-[#1e1f20] border-slate-800"
+                    : "bg-white border-slate-200"
                 }`}
               >
                 <div className="mb-8">
                   <h2
                     className={`text-3xl font-medium tracking-tight ${
                       isDarkMode
-                        ? 'text-white'
-                        : 'text-slate-800'
+                        ? "text-white"
+                        : "text-slate-800"
                     }`}
                   >
                     Mix Design Calculator
@@ -1885,8 +2000,8 @@ export default function Chat() {
                   <p
                     className={`mt-2 text-[15px] ${
                       isDarkMode
-                        ? 'text-slate-400'
-                        : 'text-slate-500'
+                        ? "text-slate-400"
+                        : "text-slate-500"
                     }`}
                   >
                     IS 10262:2019 Absolute
@@ -1902,8 +2017,8 @@ export default function Chat() {
                       <label
                         className={`block text-[13px] font-medium mb-1.5 ${
                           isDarkMode
-                            ? 'text-slate-300'
-                            : 'text-slate-700'
+                            ? "text-slate-300"
+                            : "text-slate-700"
                         }`}
                       >
                         Target Grade (fck)
@@ -1921,22 +2036,19 @@ export default function Chat() {
                         }
                         className={`w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
                           isDarkMode
-                            ? 'bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500'
-                            : 'bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300'
+                            ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
+                            : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
                         }`}
                       >
                         <option value={20}>
                           M20
                         </option>
-
                         <option value={25}>
                           M25
                         </option>
-
                         <option value={30}>
                           M30
                         </option>
-
                         <option value={40}>
                           M40
                         </option>
@@ -1947,8 +2059,8 @@ export default function Chat() {
                       <label
                         className={`block text-[13px] font-medium mb-1.5 ${
                           isDarkMode
-                            ? 'text-slate-300'
-                            : 'text-slate-700'
+                            ? "text-slate-300"
+                            : "text-slate-700"
                         }`}
                       >
                         Standard Deviation (s) -
@@ -1969,8 +2081,8 @@ export default function Chat() {
                         }
                         className={`w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
                           isDarkMode
-                            ? 'bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500'
-                            : 'bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300'
+                            ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
+                            : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
                         }`}
                       />
                     </div>
@@ -1979,8 +2091,8 @@ export default function Chat() {
                       <label
                         className={`block text-[13px] font-medium mb-1.5 ${
                           isDarkMode
-                            ? 'text-slate-300'
-                            : 'text-slate-700'
+                            ? "text-slate-300"
+                            : "text-slate-700"
                         }`}
                       >
                         Water-Cement Ratio
@@ -2000,8 +2112,8 @@ export default function Chat() {
                         }
                         className={`w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
                           isDarkMode
-                            ? 'bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500'
-                            : 'bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300'
+                            ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
+                            : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
                         }`}
                       />
                     </div>
@@ -2011,8 +2123,8 @@ export default function Chat() {
                         <label
                           className={`block text-[13px] font-medium mb-1.5 ${
                             isDarkMode
-                              ? 'text-slate-300'
-                              : 'text-slate-700'
+                              ? "text-slate-300"
+                              : "text-slate-700"
                           }`}
                         >
                           Sp. Gravity (Cement)
@@ -2034,8 +2146,8 @@ export default function Chat() {
                           }
                           className={`w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
                             isDarkMode
-                              ? 'bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500'
-                              : 'bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300'
+                              ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
+                              : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
                           }`}
                         />
                       </div>
@@ -2044,8 +2156,8 @@ export default function Chat() {
                         <label
                           className={`block text-[13px] font-medium mb-1.5 ${
                             isDarkMode
-                              ? 'text-slate-300'
-                              : 'text-slate-700'
+                              ? "text-slate-300"
+                              : "text-slate-700"
                           }`}
                         >
                           Max Water (kg/m³)
@@ -2066,8 +2178,8 @@ export default function Chat() {
                           }
                           className={`w-full p-3 rounded-[16px] border outline-none text-[14px] transition-colors ${
                             isDarkMode
-                              ? 'bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500'
-                              : 'bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300'
+                              ? "bg-[#131314] border-slate-700 text-slate-200 focus:border-slate-500"
+                              : "bg-[#f0f4f9] border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300"
                           }`}
                         />
                       </div>
@@ -2079,8 +2191,8 @@ export default function Chat() {
                       }
                       className={`w-full py-3.5 mt-2 rounded-[24px] font-medium text-[14px] transition-colors shadow-sm ${
                         isDarkMode
-                          ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                          : 'bg-slate-800 text-white hover:bg-slate-700'
+                          ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                          : "bg-slate-800 text-white hover:bg-slate-700"
                       }`}
                     >
                       Calculate Proportions
@@ -2092,15 +2204,15 @@ export default function Chat() {
                   <div
                     className={`rounded-[24px] p-8 h-full transition-colors border ${
                       isDarkMode
-                        ? 'bg-[#131314] border-slate-800'
-                        : 'bg-[#f0f4f9] border-transparent'
+                        ? "bg-[#131314] border-slate-800"
+                        : "bg-[#f0f4f9] border-transparent"
                     }`}
                   >
                     <h3
                       className={`text-[12px] font-medium uppercase tracking-wider mb-5 ${
                         isDarkMode
-                          ? 'text-slate-500'
-                          : 'text-slate-500'
+                          ? "text-slate-500"
+                          : "text-slate-500"
                       }`}
                     >
                       Output per m³
@@ -2111,15 +2223,15 @@ export default function Chat() {
                         <div
                           className={`flex justify-between items-end border-b pb-2.5 ${
                             isDarkMode
-                              ? 'border-slate-700/50'
-                              : 'border-slate-200/60'
+                              ? "border-slate-700/50"
+                              : "border-slate-200/60"
                           }`}
                         >
                           <span
                             className={`text-[14px] ${
                               isDarkMode
-                                ? 'text-slate-400'
-                                : 'text-slate-600'
+                                ? "text-slate-400"
+                                : "text-slate-600"
                             }`}
                           >
                             Target Mean Strength
@@ -2129,13 +2241,13 @@ export default function Chat() {
                           <span
                             className={`text-[16px] font-medium ${
                               isDarkMode
-                                ? 'text-slate-200'
-                                : 'text-slate-800'
+                                ? "text-slate-200"
+                                : "text-slate-800"
                             }`}
                           >
                             {
                               mixResult.targetStrength
-                            }{' '}
+                            }{" "}
                             N/mm²
                           </span>
                         </div>
@@ -2143,15 +2255,15 @@ export default function Chat() {
                         <div
                           className={`flex justify-between items-end border-b pb-2.5 ${
                             isDarkMode
-                              ? 'border-slate-700/50'
-                              : 'border-slate-200/60'
+                              ? "border-slate-700/50"
+                              : "border-slate-200/60"
                           }`}
                         >
                           <span
                             className={`text-[14px] ${
                               isDarkMode
-                                ? 'text-slate-400'
-                                : 'text-slate-600'
+                                ? "text-slate-400"
+                                : "text-slate-600"
                             }`}
                           >
                             Cement
@@ -2160,13 +2272,13 @@ export default function Chat() {
                           <span
                             className={`text-[16px] font-medium ${
                               isDarkMode
-                                ? 'text-amber-400'
-                                : 'text-slate-800'
+                                ? "text-amber-400"
+                                : "text-slate-800"
                             }`}
                           >
                             {
                               mixResult.cement
-                            }{' '}
+                            }{" "}
                             kg
                           </span>
                         </div>
@@ -2174,15 +2286,15 @@ export default function Chat() {
                         <div
                           className={`flex justify-between items-end border-b pb-2.5 ${
                             isDarkMode
-                              ? 'border-slate-700/50'
-                              : 'border-slate-200/60'
+                              ? "border-slate-700/50"
+                              : "border-slate-200/60"
                           }`}
                         >
                           <span
                             className={`text-[14px] ${
                               isDarkMode
-                                ? 'text-slate-400'
-                                : 'text-slate-600'
+                                ? "text-slate-400"
+                                : "text-slate-600"
                             }`}
                           >
                             Water
@@ -2191,13 +2303,13 @@ export default function Chat() {
                           <span
                             className={`text-[16px] font-medium ${
                               isDarkMode
-                                ? 'text-slate-200'
-                                : 'text-slate-800'
+                                ? "text-slate-200"
+                                : "text-slate-800"
                             }`}
                           >
                             {
                               mixResult.water
-                            }{' '}
+                            }{" "}
                             kg
                           </span>
                         </div>
@@ -2205,15 +2317,15 @@ export default function Chat() {
                         <div
                           className={`flex justify-between items-end border-b pb-2.5 ${
                             isDarkMode
-                              ? 'border-slate-700/50'
-                              : 'border-slate-200/60'
+                              ? "border-slate-700/50"
+                              : "border-slate-200/60"
                           }`}
                         >
                           <span
                             className={`text-[14px] ${
                               isDarkMode
-                                ? 'text-slate-400'
-                                : 'text-slate-600'
+                                ? "text-slate-400"
+                                : "text-slate-600"
                             }`}
                           >
                             Fine Aggregate (FA)
@@ -2222,11 +2334,11 @@ export default function Chat() {
                           <span
                             className={`text-[16px] font-medium ${
                               isDarkMode
-                                ? 'text-slate-200'
-                                : 'text-slate-800'
+                                ? "text-slate-200"
+                                : "text-slate-800"
                             }`}
                           >
-                            {mixResult.fa}{' '}
+                            {mixResult.fa}{" "}
                             kg
                           </span>
                         </div>
@@ -2234,15 +2346,15 @@ export default function Chat() {
                         <div
                           className={`flex justify-between items-end border-b pb-2.5 ${
                             isDarkMode
-                              ? 'border-slate-700/50'
-                              : 'border-slate-200/60'
+                              ? "border-slate-700/50"
+                              : "border-slate-200/60"
                           }`}
                         >
                           <span
                             className={`text-[14px] ${
                               isDarkMode
-                                ? 'text-slate-400'
-                                : 'text-slate-600'
+                                ? "text-slate-400"
+                                : "text-slate-600"
                             }`}
                           >
                             Coarse Aggregate (CA)
@@ -2251,11 +2363,11 @@ export default function Chat() {
                           <span
                             className={`text-[16px] font-medium ${
                               isDarkMode
-                                ? 'text-slate-200'
-                                : 'text-slate-800'
+                                ? "text-slate-200"
+                                : "text-slate-800"
                             }`}
                           >
-                            {mixResult.ca}{' '}
+                            {mixResult.ca}{" "}
                             kg
                           </span>
                         </div>
@@ -2264,8 +2376,8 @@ export default function Chat() {
                           <p
                             className={`text-[12px] mb-1 font-medium ${
                               isDarkMode
-                                ? 'text-slate-500'
-                                : 'text-slate-500'
+                                ? "text-slate-500"
+                                : "text-slate-500"
                             }`}
                           >
                             Mix Ratio (C :
@@ -2275,8 +2387,8 @@ export default function Chat() {
                           <p
                             className={`text-[26px] font-medium tracking-tight ${
                               isDarkMode
-                                ? 'text-white'
-                                : 'text-slate-800'
+                                ? "text-white"
+                                : "text-slate-800"
                             }`}
                           >
                             {
@@ -2289,18 +2401,14 @@ export default function Chat() {
                       <div
                         className={`h-full flex flex-col items-center justify-center text-center space-y-3 pb-12 ${
                           isDarkMode
-                            ? 'text-slate-500'
-                            : 'text-slate-400'
+                            ? "text-slate-500"
+                            : "text-slate-400"
                         }`}
                       >
                         <p className="text-[14px]">
-                          Adjust your
-                          parameters
-                          and click
-                          calculate
-                          to view
-                          the mix
-                          proportions.
+                          Adjust your parameters
+                          and click calculate to
+                          view the mix proportions.
                         </p>
                       </div>
                     )}

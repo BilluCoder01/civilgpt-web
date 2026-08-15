@@ -31,26 +31,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { messages } = await req.json();
+    // FIXED: Reading the specific sessionId sent from the frontend
+    const { messages, sessionId: clientSessionId } = await req.json();
     const latestMessage = messages[messages.length - 1].content;
 
-    let sessionId;
-    const { data: existingSessions } = await supabaseAdmin
-      .from('chat_sessions')
-      .select('id')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    let sessionId = clientSessionId;
 
-    if (existingSessions && existingSessions.length > 0) {
-      sessionId = existingSessions[0].id;
-    } else {
-      const { data: newSession } = await supabaseAdmin
+    // Fallback just in case the frontend sends a null session
+    if (!sessionId) {
+      const { data: existingSessions } = await supabaseAdmin
         .from('chat_sessions')
-        .insert([{ user_id: user.id, title: 'Engineering Workspace' }])
-        .select()
-        .single();
-      sessionId = newSession?.id;
+        .select('id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existingSessions && existingSessions.length > 0) {
+        sessionId = existingSessions[0].id;
+      } else {
+        const { data: newSession } = await supabaseAdmin
+          .from('chat_sessions')
+          .insert([{ user_id: user.id, title: 'Engineering Workspace' }])
+          .select()
+          .single();
+        sessionId = newSession?.id;
+      }
     }
 
     if (sessionId) {
@@ -61,7 +66,6 @@ export async function POST(req: Request) {
       }]);
     }
 
-    // THE FIX: Using the active 2026 embedding model
     const { embedding } = await embed({
       model: google.textEmbeddingModel('gemini-embedding-2'),
       value: latestMessage,

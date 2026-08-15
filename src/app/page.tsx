@@ -213,7 +213,10 @@ export default function Chat() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updatedMessages }),
+        body: JSON.stringify({ 
+          messages: updatedMessages,
+          sessionId: activeSessionId // FIXED: Sending the correct active session ID to the backend
+        }),
       });
 
       if (!response.ok) {

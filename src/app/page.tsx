@@ -28,7 +28,10 @@ type UploadStatus =
     }
   | null;
 
-// --- CHAT BUBBLES ---
+// ------------------------------------------------------------
+// CHAT BUBBLE
+// ------------------------------------------------------------
+
 const MessageBubble = memo(
   ({
     m,
@@ -49,7 +52,9 @@ const MessageBubble = memo(
                 : 'bg-[#f0f4f9] text-slate-800'
             } px-5 py-3 rounded-[24px] rounded-br-sm max-w-[85%] md:max-w-[70%] text-[15px] leading-relaxed shadow-sm`}
           >
-            <div className="whitespace-pre-wrap">{m.content}</div>
+            <div className="whitespace-pre-wrap">
+              {m.content}
+            </div>
           </div>
         </div>
       );
@@ -69,17 +74,24 @@ const MessageBubble = memo(
 
         <div
           className={`flex-1 max-w-[90%] md:max-w-[80%] text-[15px] leading-relaxed ${
-            isDark ? 'text-slate-300' : 'text-slate-800'
+            isDark
+              ? 'text-slate-300'
+              : 'text-slate-800'
           } ${isTyping ? 'typing-cursor' : ''}`}
         >
           <ReactMarkdown
-            remarkPlugins={[remarkMath, remarkGfm]}
+            remarkPlugins={[
+              remarkMath,
+              remarkGfm,
+            ]}
             rehypePlugins={[rehypeKatex]}
             components={{
               h1: ({ node, ...props }) => (
                 <h1
                   className={`text-2xl font-semibold mt-6 mb-4 ${
-                    isDark ? 'text-white' : 'text-slate-900'
+                    isDark
+                      ? 'text-white'
+                      : 'text-slate-900'
                   }`}
                   {...props}
                 />
@@ -88,7 +100,9 @@ const MessageBubble = memo(
               h2: ({ node, ...props }) => (
                 <h2
                   className={`text-xl font-semibold mt-5 mb-3 ${
-                    isDark ? 'text-white' : 'text-slate-900'
+                    isDark
+                      ? 'text-white'
+                      : 'text-slate-900'
                   }`}
                   {...props}
                 />
@@ -97,14 +111,19 @@ const MessageBubble = memo(
               h3: ({ node, ...props }) => (
                 <h3
                   className={`text-lg font-medium mt-4 mb-2 ${
-                    isDark ? 'text-white' : 'text-slate-900'
+                    isDark
+                      ? 'text-white'
+                      : 'text-slate-900'
                   }`}
                   {...props}
                 />
               ),
 
               p: ({ node, ...props }) => (
-                <p className="mb-4" {...props} />
+                <p
+                  className="mb-4"
+                  {...props}
+                />
               ),
 
               ul: ({ node, ...props }) => (
@@ -132,7 +151,9 @@ const MessageBubble = memo(
               strong: ({ node, ...props }) => (
                 <strong
                   className={`font-semibold ${
-                    isDark ? 'text-white' : 'text-slate-900'
+                    isDark
+                      ? 'text-white'
+                      : 'text-slate-900'
                   }`}
                   {...props}
                 />
@@ -167,7 +188,9 @@ const MessageBubble = memo(
               th: ({ node, ...props }) => (
                 <th
                   className={`py-2.5 px-4 font-medium whitespace-nowrap ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
+                    isDark
+                      ? 'text-slate-300'
+                      : 'text-slate-700'
                   }`}
                   {...props}
                 />
@@ -195,50 +218,95 @@ const MessageBubble = memo(
 
 MessageBubble.displayName = 'MessageBubble';
 
+// ------------------------------------------------------------
+// MAIN COMPONENT
+// ------------------------------------------------------------
+
 export default function Chat() {
   const router = useRouter();
 
-  // Stable Supabase client. This prevents the history effect from
-  // being retriggered because createClient() returned a new object
-  // after every render.
-  const supabase = useMemo(() => createClient(), []);
-
-  const [activeTab, setActiveTab] = useState<'chat' | 'calculator'>(
-    'chat'
+  // Keep the Supabase browser client stable across renders.
+  const supabase = useMemo(
+    () => createClient(),
+    []
   );
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] =
+    useState<'chat' | 'calculator'>('chat');
 
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    null
-  );
+  const [isSidebarOpen, setIsSidebarOpen] =
+    useState(true);
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [myInput, setMyInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isDarkMode, setIsDarkMode] =
+    useState(false);
+
+  const [isSettingsOpen, setIsSettingsOpen] =
+    useState(false);
+
+  const [sessions, setSessions] =
+    useState<Session[]>([]);
+
+  const [activeSessionId, setActiveSessionId] =
+    useState<string | null>(null);
+
+  const [messages, setMessages] =
+    useState<Message[]>([]);
+
+  const [myInput, setMyInput] =
+    useState('');
+
+  const [isLoading, setIsLoading] =
+    useState(false);
+
+  const [isUploading, setIsUploading] =
+    useState(false);
+
   const [uploadStatus, setUploadStatus] =
     useState<UploadStatus>(null);
-  const [isFetchingHistory, setIsFetchingHistory] = useState(true);
 
-  const [fck, setFck] = useState<number>(25);
-  const [stdDev, setStdDev] = useState<number>(4);
-  const [wcRatio, setWcRatio] = useState<number>(0.5);
-  const [sgCement, setSgCement] = useState<number>(3.15);
-  const [sgFA, setSgFA] = useState<number>(2.74);
-  const [sgCA, setSgCA] = useState<number>(2.74);
-  const [waterContent, setWaterContent] = useState<number>(186);
-  const [mixResult, setMixResult] = useState<any>(null);
+  const [isFetchingHistory, setIsFetchingHistory] =
+    useState(true);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Calculator state
+  const [fck, setFck] =
+    useState<number>(25);
 
-  // Every session/history request gets a monotonically increasing ID.
-  // This prevents an older request from overwriting a newer selection.
-  const sessionLoadRef = useRef(0);
+  const [stdDev, setStdDev] =
+    useState<number>(4);
+
+  const [wcRatio, setWcRatio] =
+    useState<number>(0.5);
+
+  const [sgCement, setSgCement] =
+    useState<number>(3.15);
+
+  const [sgFA, setSgFA] =
+    useState<number>(2.74);
+
+  const [sgCA, setSgCA] =
+    useState<number>(2.74);
+
+  const [waterContent, setWaterContent] =
+    useState<number>(186);
+
+  const [mixResult, setMixResult] =
+    useState<any>(null);
+
+  const fileInputRef =
+    useRef<HTMLInputElement>(null);
+
+  const messagesEndRef =
+    useRef<HTMLDivElement>(null);
+
+  // Every session load receives a unique ID.
+  // Older requests are ignored when a newer session
+  // selection/new-chat operation occurs.
+  const sessionLoadRef =
+    useRef(0);
+
+  // ------------------------------------------------------------
+  // RESPONSIVE SIDEBAR
+  // ------------------------------------------------------------
 
   useEffect(() => {
     const handleResize = () => {
@@ -251,106 +319,148 @@ export default function Chat() {
 
     handleResize();
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener(
+      'resize',
+      handleResize
+    );
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener(
+        'resize',
+        handleResize
+      );
     };
   }, []);
 
   // ------------------------------------------------------------
-  // INITIAL CHAT HISTORY LOAD
+  // INITIAL CHAT HISTORY
   // ------------------------------------------------------------
+
   useEffect(() => {
     let cancelled = false;
 
-    // Reserve a request ID for the initial load.
-    const initialLoadId = ++sessionLoadRef.current;
+    const initialLoadId =
+      ++sessionLoadRef.current;
 
-    const loadChatHistory = async () => {
-      setIsFetchingHistory(true);
+    const loadChatHistory =
+      async () => {
+        setIsFetchingHistory(true);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (!user || cancelled) {
-        if (!cancelled) {
-          setIsFetchingHistory(false);
+        if (!user || cancelled) {
+          if (!cancelled) {
+            setIsFetchingHistory(false);
+          }
+          return;
         }
-        return;
-      }
 
-      const {
-        data: allSessions,
-        error: sessionsError,
-      } = await supabase
-        .from('chat_sessions')
-        .select('id, title, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        const {
+          data: allSessions,
+          error: sessionsError,
+        } = await supabase
+          .from('chat_sessions')
+          .select(
+            'id, title, created_at'
+          )
+          .eq(
+            'user_id',
+            user.id
+          )
+          .order(
+            'created_at',
+            {
+              ascending: false,
+            }
+          );
 
-      // A newer operation has taken control of the session state.
-      if (
-        cancelled ||
-        initialLoadId !== sessionLoadRef.current
-      ) {
-        return;
-      }
+        // Another operation has taken control.
+        if (
+          cancelled ||
+          initialLoadId !==
+            sessionLoadRef.current
+        ) {
+          return;
+        }
 
-      if (sessionsError) {
-        console.error(
-          'Failed to load sessions:',
-          sessionsError
+        if (sessionsError) {
+          console.error(
+            'Failed to load sessions:',
+            sessionsError
+          );
+
+          setSessions([]);
+          setActiveSessionId(null);
+          setMessages([]);
+          setIsFetchingHistory(false);
+
+          return;
+        }
+
+        if (
+          !allSessions ||
+          allSessions.length === 0
+        ) {
+          setSessions([]);
+          setActiveSessionId(null);
+          setMessages([]);
+          setIsFetchingHistory(false);
+
+          return;
+        }
+
+        const firstSessionId =
+          allSessions[0].id;
+
+        const {
+          data: dbMessages,
+          error: messagesError,
+        } = await supabase
+          .from('messages')
+          .select(
+            'id, role, content'
+          )
+          .eq(
+            'session_id',
+            firstSessionId
+          )
+          .order(
+            'created_at',
+            {
+              ascending: true,
+            }
+          );
+
+        if (
+          cancelled ||
+          initialLoadId !==
+            sessionLoadRef.current
+        ) {
+          return;
+        }
+
+        if (messagesError) {
+          console.error(
+            'Failed to load messages:',
+            messagesError
+          );
+        }
+
+        setSessions(allSessions);
+
+        setActiveSessionId(
+          firstSessionId
         );
 
-        setSessions([]);
-        setActiveSessionId(null);
-        setMessages([]);
-        setIsFetchingHistory(false);
-
-        return;
-      }
-
-      if (!allSessions || allSessions.length === 0) {
-        setSessions([]);
-        setActiveSessionId(null);
-        setMessages([]);
-        setIsFetchingHistory(false);
-
-        return;
-      }
-
-      const firstSessionId = allSessions[0].id;
-
-      const {
-        data: dbMessages,
-        error: messagesError,
-      } = await supabase
-        .from('messages')
-        .select('id, role, content')
-        .eq('session_id', firstSessionId)
-        .order('created_at', { ascending: true });
-
-      if (
-        cancelled ||
-        initialLoadId !== sessionLoadRef.current
-      ) {
-        return;
-      }
-
-      if (messagesError) {
-        console.error(
-          'Failed to load initial session messages:',
-          messagesError
+        setMessages(
+          (dbMessages ||
+            []) as Message[]
         );
-      }
 
-      setSessions(allSessions);
-      setActiveSessionId(firstSessionId);
-      setMessages((dbMessages || []) as Message[]);
-      setIsFetchingHistory(false);
-    };
+        setIsFetchingHistory(false);
+      };
 
     loadChatHistory();
 
@@ -360,424 +470,658 @@ export default function Chat() {
   }, [supabase]);
 
   // ------------------------------------------------------------
-  // LOAD A SPECIFIC HISTORICAL SESSION
+  // LOAD SPECIFIC SESSION
   // ------------------------------------------------------------
-  const loadSpecificSession = async (sessionId: string) => {
-    // Do not switch sessions halfway through an AI stream.
-    if (isLoading) return;
 
-    // This request becomes the newest session-load operation.
-    const requestId = ++sessionLoadRef.current;
+  const loadSpecificSession =
+    async (
+      sessionId: string
+    ) => {
+      // Do not switch sessions during
+      // an active AI response.
+      if (isLoading) {
+        return;
+      }
 
-    if (window.innerWidth < 768) {
-      setIsSidebarOpen(false);
-    }
+      const requestId =
+        ++sessionLoadRef.current;
 
-    setActiveTab('chat');
+      if (
+        window.innerWidth < 768
+      ) {
+        setIsSidebarOpen(false);
+      }
 
-    // Update the active session immediately.
-    setActiveSessionId(sessionId);
+      setActiveTab('chat');
 
-    setIsFetchingHistory(true);
-    setMessages([]);
-
-    const {
-      data: dbMessages,
-      error,
-    } = await supabase
-      .from('messages')
-      .select('id, role, content')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-
-    // Ignore a slower request if the user selected another session.
-    if (requestId !== sessionLoadRef.current) {
-      return;
-    }
-
-    if (error) {
-      console.error(
-        'Failed to load session messages:',
-        error
+      // Immediately mark this as the active session.
+      setActiveSessionId(
+        sessionId
       );
 
+      setIsFetchingHistory(true);
       setMessages([]);
-    } else {
-      setMessages((dbMessages || []) as Message[]);
-    }
 
-    setIsFetchingHistory(false);
-  };
+      const {
+        data: dbMessages,
+        error,
+      } = await supabase
+        .from('messages')
+        .select(
+          'id, role, content'
+        )
+        .eq(
+          'session_id',
+          sessionId
+        )
+        .order(
+          'created_at',
+          {
+            ascending: true,
+          }
+        );
+
+      // User selected a newer session.
+      if (
+        requestId !==
+        sessionLoadRef.current
+      ) {
+        return;
+      }
+
+      if (error) {
+        console.error(
+          'Failed to load session:',
+          error
+        );
+
+        setMessages([]);
+      } else {
+        setMessages(
+          (dbMessages ||
+            []) as Message[]
+        );
+      }
+
+      setIsFetchingHistory(false);
+    };
 
   // ------------------------------------------------------------
   // AUTO SCROLL
   // ------------------------------------------------------------
+
   useEffect(() => {
-    if (activeTab === 'chat') {
-      messagesEndRef.current?.scrollIntoView({
-        behavior: 'smooth',
-      });
+    if (
+      activeTab === 'chat'
+    ) {
+      messagesEndRef.current?.scrollIntoView(
+        {
+          behavior: 'smooth',
+        }
+      );
     }
-  }, [messages, activeTab]);
+  }, [
+    messages,
+    activeTab,
+  ]);
 
   // ------------------------------------------------------------
   // LOGOUT
   // ------------------------------------------------------------
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
+
+  const handleLogout =
+    async () => {
+      await supabase.auth.signOut();
+      router.push('/login');
+    };
 
   // ------------------------------------------------------------
   // NEW CHAT
   // ------------------------------------------------------------
-  const handleNewChat = async () => {
-    if (isLoading) return;
 
-    // Invalidate any history request still in flight.
-    sessionLoadRef.current += 1;
+  const handleNewChat =
+    async () => {
+      if (isLoading) {
+        return;
+      }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      // Invalidate pending history requests.
+      sessionLoadRef.current += 1;
 
-    if (!user) return;
+      const {
+        data: { user },
+      } =
+        await supabase.auth.getUser();
 
-    setIsFetchingHistory(true);
+      if (!user) {
+        setIsFetchingHistory(false);
+        return;
+      }
 
-    const {
-      data: newSession,
-      error,
-    } = await supabase
-      .from('chat_sessions')
-      .insert([
-        {
-          user_id: user.id,
-          title: 'New Engineering Chat',
-        },
-      ])
-      .select('id, title, created_at')
-      .single();
+      setIsFetchingHistory(true);
 
-    if (error || !newSession) {
-      console.error(
-        'Failed to create chat session:',
-        error
+      const {
+        data: newSession,
+        error,
+      } = await supabase
+        .from('chat_sessions')
+        .insert([
+          {
+            user_id:
+              user.id,
+            title:
+              'New Engineering Chat',
+          },
+        ])
+        .select(
+          'id, title, created_at'
+        )
+        .single();
+
+      if (
+        error ||
+        !newSession
+      ) {
+        console.error(
+          'Failed to create chat session:',
+          error
+        );
+
+        setIsFetchingHistory(false);
+        return;
+      }
+
+      setSessions(
+        (prev) => [
+          newSession,
+          ...prev,
+        ]
       );
 
+      setActiveSessionId(
+        newSession.id
+      );
+
+      setMessages([]);
+
+      setActiveTab('chat');
+
       setIsFetchingHistory(false);
-      return;
-    }
 
-    // Functional update prevents stale sessions state.
-    setSessions((prev) => [
-      newSession,
-      ...prev,
-    ]);
-
-    // The newly-created UUID is now the active session.
-    setActiveSessionId(newSession.id);
-
-    // New chat must start empty.
-    setMessages([]);
-
-    setActiveTab('chat');
-    setIsFetchingHistory(false);
-
-    if (window.innerWidth < 768) {
-      setIsSidebarOpen(false);
-    }
-  };
+      if (
+        window.innerWidth < 768
+      ) {
+        setIsSidebarOpen(false);
+      }
+    };
 
   // ------------------------------------------------------------
   // PDF UPLOAD
   // ------------------------------------------------------------
-  const handleFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0];
 
-    if (!file) return;
+  const handleFileUpload =
+    async (
+      e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      const file =
+        e.target.files?.[0];
 
-    setIsUploading(true);
-    setUploadStatus(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
-      setUploadStatus({
-        type: 'success',
-        message: 'PDF Memorized.',
-      });
-
-      setTimeout(() => {
-        setUploadStatus(null);
-      }, 3000);
-    } catch (error: any) {
-      console.error('Upload failed:', error);
-
-      setUploadStatus({
-        type: 'error',
-        message: 'Failed to read PDF.',
-      });
-    } finally {
-      setIsUploading(false);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  // ------------------------------------------------------------
-  // SEND CHAT MESSAGE
-  // ------------------------------------------------------------
-  const customHandleSubmit = async (
-    e?: React.FormEvent
-  ) => {
-    if (e) {
-      e.preventDefault();
-    }
-
-    const input = myInput.trim();
-
-    if (
-      !input ||
-      isLoading ||
-      isFetchingHistory
-    ) {
-      return;
-    }
-
-    // Capture the exact session ID at the start of the request.
-    // This prevents the request from changing sessions midway.
-    const sessionId = activeSessionId;
-
-    if (!sessionId) {
-      console.error(
-        'Cannot send message: no active session.'
-      );
-      return;
-    }
-
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: input,
-    };
-
-    const aiMsgId = crypto.randomUUID();
-
-    // Optimistically display the user message and empty AI bubble.
-    setMessages((prev) => [
-      ...prev,
-      userMsg,
-      {
-        id: aiMsgId,
-        role: 'assistant',
-        content: '',
-      },
-    ]);
-
-    setMyInput('');
-    setIsLoading(true);
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-
-        body: JSON.stringify({
-          // Send the conversation as it existed before this
-          // request, plus the new user message.
-          messages: [
-            ...messages,
-            userMsg,
-          ],
-
-          // IMPORTANT: this is the captured session ID.
-          sessionId,
-        }),
-      });
-
-      if (!response.ok) {
-        const exactError = await response.text();
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === aiMsgId
-              ? {
-                  ...msg,
-                  content: `⚠️ ${exactError}`,
-                }
-              : msg
-          )
-        );
-
+      if (!file) {
         return;
       }
 
-      if (!response.body) {
-        throw new Error(
-          'Response body is empty.'
+      setIsUploading(true);
+      setUploadStatus(null);
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        'file',
+        file
+      );
+
+      try {
+        const res =
+          await fetch(
+            '/api/upload',
+            {
+              method: 'POST',
+              body: formData,
+            }
+          );
+
+        if (!res.ok) {
+          throw new Error(
+            await res.text()
+          );
+        }
+
+        setUploadStatus({
+          type: 'success',
+          message:
+            'PDF Memorized.',
+        });
+
+        setTimeout(
+          () =>
+            setUploadStatus(
+              null
+            ),
+          3000
         );
+      } catch (error) {
+        console.error(
+          'Upload failed:',
+          error
+        );
+
+        setUploadStatus({
+          type: 'error',
+          message:
+            'Failed to read PDF.',
+        });
+      } finally {
+        setIsUploading(false);
+
+        if (
+          fileInputRef.current
+        ) {
+          fileInputRef.current.value =
+            '';
+        }
+      }
+    };
+
+  // ------------------------------------------------------------
+  // SEND MESSAGE
+  // ------------------------------------------------------------
+
+  const customHandleSubmit =
+    async (
+      e?: React.FormEvent
+    ) => {
+      if (e) {
+        e.preventDefault();
       }
 
-      const reader =
-        response.body.getReader();
+      const input =
+        myInput.trim();
 
-      const decoder = new TextDecoder();
+      if (
+        !input ||
+        isLoading
+      ) {
+        return;
+      }
 
-      let currentAiText = '';
+      // Capture the session ID ONCE.
+      let sessionId =
+        activeSessionId;
 
-      while (true) {
+      // --------------------------------------------------------
+      // IMPORTANT FIX:
+      //
+      // We do NOT block the user because isFetchingHistory is
+      // true. If there is currently no active session, create
+      // one here and use its exact ID for this request.
+      // --------------------------------------------------------
+
+      if (!sessionId) {
         const {
-          done,
-          value,
-        } = await reader.read();
+          data: {
+            user,
+          },
+        } =
+          await supabase.auth.getUser();
 
-        if (done) break;
+        if (!user) {
+          console.error(
+            'Cannot send message: user is not authenticated.'
+          );
 
-        currentAiText += decoder.decode(
-          value,
-          {
-            stream: true,
-          }
+          return;
+        }
+
+        const {
+          data: newSession,
+          error: sessionError,
+        } =
+          await supabase
+            .from(
+              'chat_sessions'
+            )
+            .insert([
+              {
+                user_id:
+                  user.id,
+                title:
+                  'New Engineering Chat',
+              },
+            ])
+            .select(
+              'id, title, created_at'
+            )
+            .single();
+
+        if (
+          sessionError ||
+          !newSession
+        ) {
+          console.error(
+            'Failed to create chat session:',
+            sessionError
+          );
+
+          return;
+        }
+
+        // Prevent an older history request from
+        // changing the session we just created.
+        sessionLoadRef.current += 1;
+
+        sessionId =
+          newSession.id;
+
+        setSessions(
+          (prev) => [
+            newSession,
+            ...prev,
+          ]
         );
 
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === aiMsgId
-              ? {
-                  ...msg,
-                  content: currentAiText,
-                }
-              : msg
-          )
+        setActiveSessionId(
+          newSession.id
+        );
+
+        setMessages([]);
+
+        setActiveTab('chat');
+
+        setIsFetchingHistory(
+          false
         );
       }
 
-      // Flush any remaining decoder data.
-      currentAiText += decoder.decode();
+      // --------------------------------------------------------
+      // CREATE LOCAL USER MESSAGE
+      // --------------------------------------------------------
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === aiMsgId
-            ? {
-                ...msg,
-                content: currentAiText,
+      const userMsg: Message =
+        {
+          id:
+            crypto.randomUUID(),
+          role: 'user',
+          content: input,
+        };
+
+      const aiMsgId =
+        crypto.randomUUID();
+
+      setMessages(
+        (prev) => [
+          ...prev,
+          userMsg,
+          {
+            id: aiMsgId,
+            role: 'assistant',
+            content: '',
+          },
+        ]
+      );
+
+      setMyInput('');
+
+      setIsLoading(true);
+
+      try {
+        const response =
+          await fetch(
+            '/api/chat',
+            {
+              method: 'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
+
+              body: JSON.stringify(
+                {
+                  messages: [
+                    ...messages,
+                    userMsg,
+                  ],
+
+                  // Exact session captured for
+                  // this request.
+                  sessionId,
+                }
+              ),
+            }
+          );
+
+        if (!response.ok) {
+          const exactError =
+            await response.text();
+
+          setMessages(
+            (prev) =>
+              prev.map(
+                (msg) =>
+                  msg.id ===
+                  aiMsgId
+                    ? {
+                        ...msg,
+                        content:
+                          `⚠️ ${exactError}`,
+                      }
+                    : msg
+              )
+          );
+
+          return;
+        }
+
+        if (!response.body) {
+          throw new Error(
+            'Response body is empty.'
+          );
+        }
+
+        const reader =
+          response.body.getReader();
+
+        const decoder =
+          new TextDecoder();
+
+        let currentAiText =
+          '';
+
+        while (true) {
+          const {
+            done,
+            value,
+          } =
+            await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          currentAiText +=
+            decoder.decode(
+              value,
+              {
+                stream: true,
               }
-            : msg
-        )
-      );
+            );
 
-      // Keep the sidebar title synchronized with the server.
-      const shortTitle =
-        input.length > 25
-          ? `${input.substring(0, 25)}...`
-          : input;
+          setMessages(
+            (prev) =>
+              prev.map(
+                (msg) =>
+                  msg.id ===
+                  aiMsgId
+                    ? {
+                        ...msg,
+                        content:
+                          currentAiText,
+                      }
+                    : msg
+              )
+          );
+        }
 
-      setSessions((prev) =>
-        prev.map((session) =>
-          session.id === sessionId
-            ? {
-                ...session,
-                title: shortTitle,
-              }
-            : session
-        )
-      );
-    } catch (error) {
-      console.error(
-        'Chat stream failed:',
-        error
-      );
+        currentAiText +=
+          decoder.decode();
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === aiMsgId
-            ? {
-                ...msg,
-                content: '⚠️ Stream failed.',
-              }
-            : msg
-        )
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        setMessages(
+          (prev) =>
+            prev.map(
+              (msg) =>
+                msg.id === aiMsgId
+                  ? {
+                      ...msg,
+                      content:
+                        currentAiText,
+                    }
+                  : msg
+            )
+        );
+
+        // Keep sidebar title synchronized.
+        const shortTitle =
+          input.length > 25
+            ? `${input.substring(
+                0,
+                25
+              )}...`
+            : input;
+
+        setSessions(
+          (prev) =>
+            prev.map(
+              (session) =>
+                session.id ===
+                sessionId
+                  ? {
+                      ...session,
+                      title:
+                        shortTitle,
+                    }
+                  : session
+            )
+        );
+      } catch (error) {
+        console.error(
+          'Chat stream failed:',
+          error
+        );
+
+        setMessages(
+          (prev) =>
+            prev.map(
+              (msg) =>
+                msg.id === aiMsgId
+                  ? {
+                      ...msg,
+                      content:
+                        '⚠️ Stream failed.',
+                    }
+                  : msg
+            )
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
   // ------------------------------------------------------------
   // MIX DESIGN CALCULATOR
   // ------------------------------------------------------------
-  const calculateMix = () => {
-    const targetStrength =
-      fck + 1.65 * stdDev;
 
-    const cement =
-      waterContent / wcRatio;
+  const calculateMix =
+    () => {
+      const targetStrength =
+        fck +
+        1.65 *
+          stdDev;
 
-    const volCement =
-      cement / (sgCement * 1000);
+      const cement =
+        waterContent /
+        wcRatio;
 
-    const volWater =
-      waterContent / 1000;
+      const volCement =
+        cement /
+        (sgCement *
+          1000);
 
-    const airVolume = 0.02;
+      const volWater =
+        waterContent /
+        1000;
 
-    const volAggregates =
-      1 -
-      (volCement +
-        volWater +
-        airVolume);
+      const airVolume =
+        0.02;
 
-    const volCA =
-      volAggregates * 0.6;
+      const volAggregates =
+        1 -
+        (volCement +
+          volWater +
+          airVolume);
 
-    const volFA =
-      volAggregates * 0.4;
+      const volCA =
+        volAggregates *
+        0.6;
 
-    const massCA =
-      volCA * sgCA * 1000;
+      const volFA =
+        volAggregates *
+        0.4;
 
-    const massFA =
-      volFA * sgFA * 1000;
+      const massCA =
+        volCA *
+        sgCA *
+        1000;
 
-    setMixResult({
-      targetStrength:
-        targetStrength.toFixed(2),
+      const massFA =
+        volFA *
+        sgFA *
+        1000;
 
-      cement:
-        cement.toFixed(2),
+      setMixResult({
+        targetStrength:
+          targetStrength.toFixed(
+            2
+          ),
 
-      water:
-        waterContent.toFixed(2),
+        cement:
+          cement.toFixed(
+            2
+          ),
 
-      fa:
-        massFA.toFixed(2),
+        water:
+          waterContent.toFixed(
+            2
+          ),
 
-      ca:
-        massCA.toFixed(2),
+        fa:
+          massFA.toFixed(
+            2
+          ),
 
-      ratio:
-        `1 : ${(massFA / cement).toFixed(
-          2
-        )} : ${(massCA / cement).toFixed(2)}`,
-    });
-  };
+        ca:
+          massCA.toFixed(
+            2
+          ),
+
+        ratio:
+          `1 : ${(massFA / cement).toFixed(
+            2
+          )} : ${(massCA / cement).toFixed(
+            2
+          )}`,
+      });
+    };
 
   return (
     <div
@@ -787,7 +1131,10 @@ export default function Chat() {
           : 'bg-white text-slate-800'
       }`}
     >
-      {/* --- SIDEBAR TOGGLE ICON --- */}
+      {/* -------------------------------------------------- */}
+      {/* SIDEBAR TOGGLE */}
+      {/* -------------------------------------------------- */}
+
       <button
         onClick={() =>
           setIsSidebarOpen(
@@ -817,7 +1164,7 @@ export default function Chat() {
         </svg>
       </button>
 
-      {/* --- MOBILE OVERLAY --- */}
+      {/* MOBILE OVERLAY */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity"
@@ -827,7 +1174,10 @@ export default function Chat() {
         />
       )}
 
-      {/* --- SIDEBAR --- */}
+      {/* -------------------------------------------------- */}
+      {/* SIDEBAR */}
+      {/* -------------------------------------------------- */}
+
       <aside
         className={`fixed inset-y-0 left-0 z-50 md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col ${
           isDarkMode
@@ -839,7 +1189,6 @@ export default function Chat() {
             : 'w-[260px] -translate-x-full md:translate-x-0 md:w-[64px]'
         }`}
       >
-        {/* Header Space */}
         <div className="h-[64px] flex items-center shrink-0">
           <div className="w-[64px] shrink-0" />
 
@@ -858,7 +1207,7 @@ export default function Chat() {
           </span>
         </div>
 
-        {/* New Chat Button */}
+        {/* NEW CHAT */}
         <div className="px-3 py-2 shrink-0 relative group flex justify-center md:justify-start">
           <button
             onClick={handleNewChat}
@@ -912,17 +1261,17 @@ export default function Chat() {
           )}
         </div>
 
-        {/* Tools Section */}
+        {/* TOOLS */}
         <div className="mt-2 px-3 space-y-1">
           <h3
             className={`text-[12px] font-medium px-2 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${
-              isDarkMode
-                ? 'text-slate-500'
-                : 'text-slate-500'
-            } ${
               isSidebarOpen
                 ? 'max-w-[100px] opacity-100'
                 : 'max-w-0 opacity-0 h-0 m-0'
+            } ${
+              isDarkMode
+                ? 'text-slate-500'
+                : 'text-slate-500'
             }`}
           >
             Tools
@@ -933,8 +1282,13 @@ export default function Chat() {
               onClick={() => {
                 setActiveTab('chat');
 
-                if (window.innerWidth < 768) {
-                  setIsSidebarOpen(false);
+                if (
+                  window.innerWidth <
+                  768
+                ) {
+                  setIsSidebarOpen(
+                    false
+                  );
                 }
               }}
               className={`flex items-center rounded-full transition-colors ${
@@ -982,14 +1336,22 @@ export default function Chat() {
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
               onClick={() => {
-                setActiveTab('calculator');
+                setActiveTab(
+                  'calculator'
+                );
 
-                if (window.innerWidth < 768) {
-                  setIsSidebarOpen(false);
+                if (
+                  window.innerWidth <
+                  768
+                ) {
+                  setIsSidebarOpen(
+                    false
+                  );
                 }
               }}
               className={`flex items-center rounded-full transition-colors ${
-                activeTab === 'calculator'
+                activeTab ===
+                'calculator'
                   ? isDarkMode
                     ? 'bg-[#333537] text-slate-100 font-medium'
                     : 'bg-[#dce0e3] text-slate-900 font-medium'
@@ -1031,17 +1393,17 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* Chat History List */}
+        {/* CHAT HISTORY */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden mt-2 px-3 space-y-0.5 pb-4">
           <h3
             className={`text-[12px] font-medium px-2 mt-4 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${
-              isDarkMode
-                ? 'text-slate-500'
-                : 'text-slate-500'
-            } ${
               isSidebarOpen
                 ? 'max-w-[100px] opacity-100'
                 : 'max-w-0 opacity-0 h-0 m-0'
+            } ${
+              isDarkMode
+                ? 'text-slate-500'
+                : 'text-slate-500'
             }`}
           >
             Recent
@@ -1054,88 +1416,100 @@ export default function Chat() {
               No previous chats.
             </div>
           ) : (
-            sessions.map((session) => (
-              <div
-                key={session.id}
-                className="relative group w-full flex justify-center md:justify-start"
-              >
-                <button
-                  disabled={isLoading}
-                  onClick={() =>
-                    loadSpecificSession(session.id)
+            sessions.map(
+              (session) => (
+                <div
+                  key={
+                    session.id
                   }
-                  className={`flex items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    activeSessionId === session.id &&
-                    activeTab === 'chat'
-                      ? isDarkMode
-                        ? 'bg-[#333537] text-slate-200'
-                        : 'bg-[#dce0e3] text-slate-900 font-medium'
-                      : isDarkMode
-                      ? 'text-slate-400 hover:bg-[#333537]'
-                      : 'text-slate-600 hover:bg-[#e8eaed]'
-                  } ${
-                    isSidebarOpen
-                      ? 'w-full py-2 px-3'
-                      : 'h-[40px] w-[40px] justify-center px-0'
-                  }`}
+                  className="relative group w-full flex justify-center md:justify-start"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-[18px] h-[18px] shrink-0 opacity-70"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z"
-                    />
-                  </svg>
-
-                  <span
-                    className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
+                  <button
+                    onClick={() =>
+                      loadSpecificSession(
+                        session.id
+                      )
+                    }
+                    disabled={
+                      isLoading
+                    }
+                    className={`flex items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      activeSessionId ===
+                        session.id &&
+                      activeTab ===
+                        'chat'
+                        ? isDarkMode
+                          ? 'bg-[#333537] text-slate-200'
+                          : 'bg-[#dce0e3] text-slate-900 font-medium'
+                        : isDarkMode
+                        ? 'text-slate-400 hover:bg-[#333537]'
+                        : 'text-slate-600 hover:bg-[#e8eaed]'
+                    } ${
                       isSidebarOpen
-                        ? 'ml-3 opacity-100 max-w-[150px]'
-                        : 'max-w-0 opacity-0 ml-0'
+                        ? 'w-full py-2 px-3'
+                        : 'h-[40px] w-[40px] justify-center px-0'
                     }`}
                   >
-                    {session.title ||
-                      'Workspace'}
-                  </span>
-                </button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={
+                        1.5
+                      }
+                      stroke="currentColor"
+                      className="w-[18px] h-[18px] shrink-0 opacity-70"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z"
+                      />
+                    </svg>
 
-                {!isSidebarOpen && (
-                  <div
-                    className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
-                      isDarkMode
-                        ? 'bg-slate-700 text-white'
-                        : 'bg-slate-800 text-white'
-                    }`}
-                  >
-                    {session.title ||
-                      'Workspace'}
-                  </div>
-                )}
-              </div>
-            ))
+                    <span
+                      className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
+                        isSidebarOpen
+                          ? 'ml-3 opacity-100 max-w-[150px]'
+                          : 'max-w-0 opacity-0 ml-0'
+                      }`}
+                    >
+                      {session.title ||
+                        'Workspace'}
+                    </span>
+                  </button>
+
+                  {!isSidebarOpen && (
+                    <div
+                      className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
+                        isDarkMode
+                          ? 'bg-slate-700 text-white'
+                          : 'bg-slate-800 text-white'
+                      }`}
+                    >
+                      {session.title ||
+                        'Workspace'}
+                    </div>
+                  )}
+                </div>
+              )
+            )
           )}
         </div>
 
-        {/* Footer: Settings & User */}
+        {/* FOOTER / SETTINGS */}
         <div className="p-3 shrink-0 flex flex-col gap-1 relative">
-          {/* Overlay to close settings */}
           {isSettingsOpen && (
             <div
               className="fixed inset-0 z-[90]"
               onClick={() =>
-                setIsSettingsOpen(false)
+                setIsSettingsOpen(
+                  false
+                )
               }
             />
           )}
 
-          {/* Settings Menu Popup */}
           {isSettingsOpen && (
             <div
               className={`absolute left-full ml-2 bottom-4 w-[220px] rounded-2xl p-2 shadow-xl z-[101] border transition-colors ${
@@ -1150,7 +1524,9 @@ export default function Chat() {
 
               <div
                 onClick={() =>
-                  setIsDarkMode(!isDarkMode)
+                  setIsDarkMode(
+                    !isDarkMode
+                  )
                 }
                 className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${
                   isDarkMode
@@ -1160,7 +1536,9 @@ export default function Chat() {
               >
                 <div className="flex items-center gap-2.5">
                   <span className="text-[15px]">
-                    {isDarkMode ? '🌙' : '☀️'}
+                    {isDarkMode
+                      ? '🌙'
+                      : '☀️'}
                   </span>
 
                   <span className="text-[13px] font-medium">
@@ -1188,7 +1566,9 @@ export default function Chat() {
               <div className="my-1 border-t border-slate-200/20" />
 
               <div
-                onClick={handleLogout}
+                onClick={
+                  handleLogout
+                }
                 className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-colors ${
                   isDarkMode
                     ? 'hover:bg-slate-700 text-rose-400'
@@ -1217,7 +1597,6 @@ export default function Chat() {
             </div>
           )}
 
-          {/* Settings / Gear Button */}
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
               onClick={() =>
@@ -1250,7 +1629,7 @@ export default function Chat() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.528.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.397.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z"
+                  d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.528.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.25-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.397.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z"
                 />
 
                 <path
@@ -1287,9 +1666,11 @@ export default function Chat() {
         </div>
       </aside>
 
-      {/* --- MAIN CONTENT AREA --- */}
+      {/* -------------------------------------------------- */}
+      {/* MAIN CONTENT */}
+      {/* -------------------------------------------------- */}
+
       <main className="flex-1 flex flex-col relative h-full min-w-0 transition-all duration-300">
-        {/* Top spacing placeholder */}
         <div className="h-[64px] shrink-0 w-full flex items-center md:hidden pl-[64px]">
           {!isSidebarOpen && (
             <span
@@ -1304,10 +1685,12 @@ export default function Chat() {
           )}
         </div>
 
-        {/* --- CHAT VIEW --- */}
+        {/* -------------------------------------------------- */}
+        {/* CHAT VIEW */}
+        {/* -------------------------------------------------- */}
+
         {activeTab === 'chat' && (
           <div className="flex-1 flex flex-col relative overflow-hidden h-full">
-            {/* Scrollable Chat Area */}
             <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-2 pb-32">
               <div className="max-w-3xl mx-auto w-full">
                 {isFetchingHistory ? (
@@ -1322,7 +1705,8 @@ export default function Chat() {
                       ⏳
                     </span>
                   </div>
-                ) : messages.length === 0 ? (
+                ) : messages.length ===
+                  0 ? (
                   <div className="flex flex-col h-full text-left space-y-3 pt-[15vh]">
                     <h2
                       className={`text-4xl font-medium tracking-tight ${
@@ -1341,34 +1725,46 @@ export default function Chat() {
                           : 'text-[#c4c7c5]'
                       }`}
                     >
-                      How can I help you with your
-                      structural analysis today?
+                      How can I help you
+                      with your structural
+                      analysis today?
                     </p>
                   </div>
                 ) : (
-                  messages.map((m, index) => (
-                    <MessageBubble
-                      key={m.id}
-                      m={m}
-                      isTyping={
-                        isLoading &&
-                        index ===
-                          messages.length - 1 &&
-                        m.role === 'assistant'
-                      }
-                      isDark={isDarkMode}
-                    />
-                  ))
+                  messages.map(
+                    (
+                      m,
+                      index
+                    ) => (
+                      <MessageBubble
+                        key={m.id}
+                        m={m}
+                        isTyping={
+                          isLoading &&
+                          index ===
+                            messages.length -
+                              1 &&
+                          m.role ===
+                            'assistant'
+                        }
+                        isDark={
+                          isDarkMode
+                        }
+                      />
+                    )
+                  )
                 )}
 
                 <div
-                  ref={messagesEndRef}
+                  ref={
+                    messagesEndRef
+                  }
                   className="h-4"
                 />
               </div>
             </div>
 
-            {/* Floating Pill Input Box */}
+            {/* FLOATING INPUT */}
             <div
               className={`absolute bottom-0 left-0 w-full pt-6 pb-6 px-4 md:px-8 bg-gradient-to-t ${
                 isDarkMode
@@ -1390,7 +1786,9 @@ export default function Chat() {
                         : 'bg-[#fce8e6] text-[#c5221f]'
                     }`}
                   >
-                    {uploadStatus.message}
+                    {
+                      uploadStatus.message
+                    }
                   </div>
                 )}
 
@@ -1408,7 +1806,9 @@ export default function Chat() {
                     type="file"
                     accept="application/pdf"
                     className="hidden"
-                    ref={fileInputRef}
+                    ref={
+                      fileInputRef
+                    }
                     onChange={
                       handleFileUpload
                     }
@@ -1421,8 +1821,7 @@ export default function Chat() {
                     }
                     disabled={
                       isUploading ||
-                      isLoading ||
-                      isFetchingHistory
+                      isLoading
                     }
                     className={`p-2.5 rounded-full transition-colors shrink-0 mb-0.5 ml-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                       isDarkMode
@@ -1431,24 +1830,26 @@ export default function Chat() {
                     }`}
                     title="Upload IS Code PDF"
                   >
-                    {isUploading ? (
-                      '⏳'
-                    ) : (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}
-                        stroke="currentColor"
-                        className="w-5 h-5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M12 4.5v15m7.5-7.5h-15"
-                        />
-                      </svg>
-                    )}
+                    {isUploading
+                      ? '⏳'
+                      : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={
+                              2
+                            }
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M12 4.5v15m7.5-7.5h-15"
+                            />
+                          </svg>
+                        )}
                   </button>
 
                   <textarea
@@ -1458,39 +1859,45 @@ export default function Chat() {
                         : 'text-slate-800 placeholder-slate-500'
                     }`}
                     rows={1}
-                    value={myInput}
+                    value={
+                      myInput
+                    }
                     placeholder="Ask about codes, mix proportions, or loads..."
                     onChange={(e) =>
                       setMyInput(
-                        e.target.value
+                        e.target
+                          .value
                       )
                     }
                     onKeyDown={(e) => {
                       if (
-                        e.key === 'Enter' &&
+                        e.key ===
+                          'Enter' &&
                         !e.shiftKey
                       ) {
                         e.preventDefault();
+
                         customHandleSubmit();
                       }
                     }}
+                    // IMPORTANT:
+                    // History loading no longer disables typing.
                     disabled={
-                      isLoading ||
-                      isFetchingHistory
+                      isLoading
                     }
                   />
 
                   <button
                     type="submit"
                     disabled={
-                      myInput.trim() === '' ||
-                      isLoading ||
-                      isFetchingHistory
+                      myInput.trim() ===
+                        '' ||
+                      isLoading
                     }
-                    className={`p-2.5 rounded-full shrink-0 mb-0.5 transition-colors disabled:cursor-not-allowed ${
-                      myInput.trim() === '' ||
-                      isLoading ||
-                      isFetchingHistory
+                    className={`p-2.5 rounded-full shrink-0 mb-0.5 transition-colors ${
+                      myInput.trim() ===
+                        '' ||
+                      isLoading
                         ? isDarkMode
                           ? 'text-slate-600'
                           : 'text-slate-300'
@@ -1526,8 +1933,12 @@ export default function Chat() {
           </div>
         )}
 
-        {/* --- CALCULATOR INTERFACE --- */}
-        {activeTab === 'calculator' && (
+        {/* -------------------------------------------------- */}
+        {/* CALCULATOR */}
+        {/* -------------------------------------------------- */}
+
+        {activeTab ===
+          'calculator' && (
           <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
             <div className="max-w-4xl mx-auto w-full">
               <div
@@ -1555,13 +1966,12 @@ export default function Chat() {
                         : 'text-slate-500'
                     }`}
                   >
-                    IS 10262:2019 Absolute Volume
-                    Method
+                    IS 10262:2019 Absolute
+                    Volume Method
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
-                  {/* Inputs */}
                   <div className="space-y-5">
                     <div>
                       <label
@@ -1579,7 +1989,8 @@ export default function Chat() {
                         onChange={(e) =>
                           setFck(
                             Number(
-                              e.target.value
+                              e.target
+                                .value
                             )
                           )
                         }
@@ -1623,7 +2034,8 @@ export default function Chat() {
                         onChange={(e) =>
                           setStdDev(
                             Number(
-                              e.target.value
+                              e.target
+                                .value
                             )
                           )
                         }
@@ -1653,7 +2065,8 @@ export default function Chat() {
                         onChange={(e) =>
                           setWcRatio(
                             Number(
-                              e.target.value
+                              e.target
+                                .value
                             )
                           )
                         }
@@ -1684,7 +2097,8 @@ export default function Chat() {
                           onChange={(e) =>
                             setSgCement(
                               Number(
-                                e.target.value
+                                e.target
+                                  .value
                               )
                             )
                           }
@@ -1713,7 +2127,8 @@ export default function Chat() {
                           onChange={(e) =>
                             setWaterContent(
                               Number(
-                                e.target.value
+                                e.target
+                                  .value
                               )
                             )
                           }
@@ -1740,7 +2155,6 @@ export default function Chat() {
                     </button>
                   </div>
 
-                  {/* Results */}
                   <div
                     className={`rounded-[24px] p-8 h-full transition-colors border ${
                       isDarkMode
@@ -1816,7 +2230,9 @@ export default function Chat() {
                                 : 'text-slate-800'
                             }`}
                           >
-                            {mixResult.cement}{' '}
+                            {
+                              mixResult.cement
+                            }{' '}
                             kg
                           </span>
                         </div>
@@ -1845,7 +2261,9 @@ export default function Chat() {
                                 : 'text-slate-800'
                             }`}
                           >
-                            {mixResult.water}{' '}
+                            {
+                              mixResult.water
+                            }{' '}
                             kg
                           </span>
                         </div>
@@ -1874,7 +2292,8 @@ export default function Chat() {
                                 : 'text-slate-800'
                             }`}
                           >
-                            {mixResult.fa} kg
+                            {mixResult.fa}{' '}
+                            kg
                           </span>
                         </div>
 
@@ -1902,7 +2321,8 @@ export default function Chat() {
                                 : 'text-slate-800'
                             }`}
                           >
-                            {mixResult.ca} kg
+                            {mixResult.ca}{' '}
+                            kg
                           </span>
                         </div>
 
@@ -1914,7 +2334,8 @@ export default function Chat() {
                                 : 'text-slate-500'
                             }`}
                           >
-                            Mix Ratio (C : FA : CA)
+                            Mix Ratio (C :
+                            FA : CA)
                           </p>
 
                           <p
@@ -1924,7 +2345,9 @@ export default function Chat() {
                                 : 'text-slate-800'
                             }`}
                           >
-                            {mixResult.ratio}
+                            {
+                              mixResult.ratio
+                            }
                           </p>
                         </div>
                       </div>
@@ -1937,9 +2360,13 @@ export default function Chat() {
                         }`}
                       >
                         <p className="text-[14px]">
-                          Adjust your parameters
-                          and click calculate to
-                          view the mix proportions.
+                          Adjust your
+                          parameters
+                          and click
+                          calculate
+                          to view
+                          the mix
+                          proportions.
                         </p>
                       </div>
                     )}

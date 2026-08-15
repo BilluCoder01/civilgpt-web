@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     // UPDATED: Fixed embedding model name to prevent 404 deadlocks
     const { embedding } = await embed({
       // @ts-ignore
-      model: google.textEmbeddingModel('text-embedding-004', { outputDimensionality: 768 }),
+      model: google.textEmbeddingModel('text-embedding-005', { outputDimensionality: 768 }),
       value: latestMessage,
     });
 

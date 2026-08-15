@@ -67,7 +67,7 @@ export default function Chat() {
   const [activeTab, setActiveTab] = useState<'chat' | 'calculator'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // NEW: Settings Menu State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -152,7 +152,6 @@ export default function Chat() {
   };
 
   const handleNewChat = async () => {
-    // 1. Create a new session in Supabase immediately
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -166,7 +165,6 @@ export default function Chat() {
       .single();
 
     if (newSession) {
-      // 2. Add it to local state so it appears instantly
       setSessions([newSession, ...sessions]);
       setActiveSessionId(newSession.id);
     }
@@ -186,7 +184,7 @@ export default function Chat() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/chat', { method: 'POST', body: formData });
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
       if (!res.ok) throw new Error(await res.text());
       setUploadStatus({ type: 'success', message: 'PDF Memorized.' });
       setTimeout(() => setUploadStatus(null), 3000);
@@ -286,7 +284,6 @@ export default function Chat() {
       )}
 
       {/* --- SIDEBAR --- */}
-      {/* Note: overflow-hidden removed so tooltips can escape */}
       <aside 
         className={`fixed inset-y-0 left-0 z-50 md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col ${
           isDarkMode ? 'bg-[#1e1f20]' : 'bg-[#f0f4f9]'
@@ -420,7 +417,6 @@ export default function Chat() {
             <div className={`absolute left-full ml-2 bottom-4 w-[220px] rounded-2xl p-2 shadow-xl z-[101] border transition-colors ${isDarkMode ? 'bg-[#333537] border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}>
                <div className="text-[11px] font-semibold uppercase tracking-wider mb-2 px-2 opacity-60">Settings</div>
                
-               {/* Dark Mode Toggle inside Settings */}
                <div 
                  onClick={() => setIsDarkMode(!isDarkMode)}
                  className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}
@@ -429,13 +425,11 @@ export default function Chat() {
                    <span className="text-[15px]">{isDarkMode ? '🌙' : '☀️'}</span>
                    <span className="text-[13px] font-medium">Dark Theme</span>
                  </div>
-                 {/* Visual Switch */}
                  <div className={`w-8 h-[18px] rounded-full flex items-center p-0.5 transition-colors ${isDarkMode ? 'bg-amber-500' : 'bg-slate-300'}`}>
                    <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-300 ${isDarkMode ? 'translate-x-[14px]' : 'translate-x-0'}`} />
                  </div>
                </div>
 
-               {/* Logout inside Settings */}
                <div className="my-1 border-t border-slate-200/20" />
                <div 
                  onClick={handleLogout}

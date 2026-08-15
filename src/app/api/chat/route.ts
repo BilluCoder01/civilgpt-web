@@ -1,32 +1,19 @@
 import { NextResponse } from 'next/server';
 import { google } from '@ai-sdk/google';
-import { streamText, embed, embedMany } from 'ai';
+import { streamText, embed } from 'ai';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs'; 
-export const maxDuration = 120; 
+export const runtime = 'edge'; 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// ==========================================
-// PDF EXTRACTOR
-// ==========================================
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const { PDFParse } = require('pdf-parse');
-  const parser = new PDFParse({ data: buffer });
-  const result = await parser.getText();
-  await parser.destroy();
-  return result.text;
-}
-
 export async function POST(req: Request) {
   try {
-    // 1. SECURE THE ROUTE: Find out exactly which user is making this request
     const cookieStore = await cookies();
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,49 +30,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const contentType = req.headers.get('content-type') || '';
-
-    // ==========================================
-    // MODE 1: PDF UPLOAD HANDLING
-    // ==========================================
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const file = formData.get('file') as File;
-      if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const rawText = await extractPdfText(buffer);
-      const cleanText = rawText.replace(/\u0000/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ');
-
-      const chunks: string[] = [];
-      for (let i = 0; i < cleanText.length; i += 1000) chunks.push(cleanText.substring(i, i + 1000));
-      if (chunks.length === 0) return NextResponse.json({ error: "No text found" }, { status: 400 });
-
-      const { embeddings } = await embedMany({
-        // @ts-ignore
-        model: google.textEmbeddingModel('gemini-embedding-001', { outputDimensionality: 768 }),
-        values: chunks,
-      });
-
-      const rowsToInsert = chunks.map((chunk, index) => ({
-        content: chunk,
-        embedding: embeddings[index].slice(0, 768),
-        metadata: { filename: file.name, chunk_index: index },
-        user_id: user.id
-      }));
-
-      const { error } = await supabaseAdmin.from('engineering_documents').insert(rowsToInsert);
-      if (error) throw error;
-      return NextResponse.json({ success: true }, { status: 200 });
-    }
-
-    // ==========================================
-    // MODE 2: CHAT & MEMORY HANDLING
-    // ==========================================
     const { messages } = await req.json();
     const latestMessage = messages[messages.length - 1].content;
 
-    // 2. MEMORY MANAGEMENT: Check for an active session or create one
     let sessionId;
     const { data: existingSessions } = await supabaseAdmin
       .from('chat_sessions')
@@ -105,7 +52,6 @@ export async function POST(req: Request) {
       sessionId = newSession?.id;
     }
 
-    // Save the User's message to the database
     if (sessionId) {
       await supabaseAdmin.from('messages').insert([{
         session_id: sessionId,
@@ -114,7 +60,6 @@ export async function POST(req: Request) {
       }]);
     }
 
-    // 3. VECTOR SEARCH
     const { embedding } = await embed({
       // @ts-ignore
       model: google.textEmbeddingModel('gemini-embedding-001', { outputDimensionality: 768 }),
@@ -124,14 +69,13 @@ export async function POST(req: Request) {
     const { data: documents, error: rpcError } = await supabaseAdmin.rpc('match_engineering_codes', {
       query_embedding: embedding.slice(0, 768),
       match_threshold: 0.5, 
-      match_count: 3, // Reduced from 5 to improve latency
+      match_count: 3, 
       p_user_id: user.id
     });
 
     if (rpcError) console.error("Supabase Error:", rpcError);
     const contextText = documents?.map((doc: any) => doc.content).join('\n\n---\n\n') || "No documents found.";
 
-    // 4. BEHAVIORAL PERSONALIZATION PROMPT
     const systemPrompt = `You are CivilGPT, a professional structural engineering AI assistant.
     
     CRITICAL BEHAVIORAL INSTRUCTIONS:
@@ -145,13 +89,11 @@ export async function POST(req: Request) {
     ${contextText}
     </retrieved_context>`;
 
-    // 5. STREAM & SAVE AI RESPONSE
     const result = await streamText({
-      model: google('gemini-1.5-flash'), // Model updated to prevent 404
+      model: google('gemini-1.5-flash'), 
       messages,
       system: systemPrompt,
       onFinish: async ({ text }) => {
-        // Once the AI finishes streaming, save it to memory
         if (sessionId) {
           await supabaseAdmin.from('messages').insert([{
             session_id: sessionId,
@@ -159,7 +101,6 @@ export async function POST(req: Request) {
             content: text
           }]);
 
-          // Auto-generate title using the correct 'count' destructing
           const { count: msgCount } = await supabaseAdmin
             .from('messages')
             .select('*', { count: 'exact', head: true })
@@ -179,7 +120,7 @@ export async function POST(req: Request) {
     return result.toTextStreamResponse();
 
   } catch (error: any) {
-    console.error("\n❌ BACKEND CRASH:", error.message, "\n");
+    console.error("\n❌ EDGE CHAT CRASH:", error.message, "\n");
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

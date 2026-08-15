@@ -14,7 +14,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // ==========================================
-// CORRECTED V2 PDF EXTRACTOR
+// PDF EXTRACTOR
 // ==========================================
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const { PDFParse } = require('pdf-parse');
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
         content: chunk,
         embedding: embeddings[index].slice(0, 768),
         metadata: { filename: file.name, chunk_index: index },
-        user_id: user.id // <-- SECURE: Attach PDF directly to this user
+        user_id: user.id
       }));
 
       const { error } = await supabaseAdmin.from('engineering_documents').insert(rowsToInsert);
@@ -124,8 +124,8 @@ export async function POST(req: Request) {
     const { data: documents, error: rpcError } = await supabaseAdmin.rpc('match_engineering_codes', {
       query_embedding: embedding.slice(0, 768),
       match_threshold: 0.5, 
-      match_count: 5,
-      p_user_id: user.id // <-- SECURE: Only search this user's PDFs (or global NULL ones)
+      match_count: 3, // Reduced from 5 to improve latency
+      p_user_id: user.id
     });
 
     if (rpcError) console.error("Supabase Error:", rpcError);
@@ -147,11 +147,11 @@ export async function POST(req: Request) {
 
     // 5. STREAM & SAVE AI RESPONSE
     const result = await streamText({
-      model: google('gemini-3.6-flash'), 
+      model: google('gemini-1.5-flash'), // Model updated to prevent 404
       messages,
       system: systemPrompt,
       onFinish: async ({ text }) => {
-        // Save the AI response
+        // Once the AI finishes streaming, save it to memory
         if (sessionId) {
           await supabaseAdmin.from('messages').insert([{
             session_id: sessionId,
@@ -159,13 +159,13 @@ export async function POST(req: Request) {
             content: text
           }]);
 
-          // OPTIONAL: Auto-generate title if it's the first exchange
+          // Auto-generate title using the correct 'count' destructing
           const { count: msgCount } = await supabaseAdmin
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('session_id', sessionId);
 
-          if (msgCount && msgCount < 3) {
+          if (msgCount !== null && msgCount < 3) {
             const shortTitle = latestMessage.substring(0, 25) + "...";
             await supabaseAdmin
               .from('chat_sessions')

@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, embed } from 'ai';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'edge'; 
+// CHANGED: Moved back to Node.js for stable database and API chaining
+export const runtime = 'nodejs'; 
+export const maxDuration = 60; 
+
+// EXPLICIT INITIALIZATION: Prevents silent hangs if the env var is named differently
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
+});
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -60,9 +67,10 @@ export async function POST(req: Request) {
       }]);
     }
 
+    // UPDATED: Fixed embedding model name to prevent 404 deadlocks
     const { embedding } = await embed({
       // @ts-ignore
-      model: google.textEmbeddingModel('gemini-embedding-001', { outputDimensionality: 768 }),
+      model: google.textEmbeddingModel('text-embedding-004', { outputDimensionality: 768 }),
       value: latestMessage,
     });
 
@@ -120,7 +128,7 @@ export async function POST(req: Request) {
     return result.toTextStreamResponse();
 
   } catch (error: any) {
-    console.error("\n❌ EDGE CHAT CRASH:", error.message, "\n");
+    console.error("\n❌ CHAT CRASH:", error.message, "\n");
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

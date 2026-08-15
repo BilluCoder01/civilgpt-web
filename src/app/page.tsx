@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useEffect, useState, useMemo, memo } from 'react';
+import {
+  useRef,
+  useEffect,
+  useState,
+  useMemo,
+  memo,
+} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -225,7 +231,6 @@ MessageBubble.displayName = 'MessageBubble';
 export default function Chat() {
   const router = useRouter();
 
-  // Keep the Supabase browser client stable across renders.
   const supabase = useMemo(
     () => createClient(),
     []
@@ -246,6 +251,9 @@ export default function Chat() {
   const [sessions, setSessions] =
     useState<Session[]>([]);
 
+  // IMPORTANT:
+  // null means the user is currently on a fresh,
+  // unsaved chat.
   const [activeSessionId, setActiveSessionId] =
     useState<string | null>(null);
 
@@ -298,9 +306,8 @@ export default function Chat() {
   const messagesEndRef =
     useRef<HTMLDivElement>(null);
 
-  // Every session load receives a unique ID.
-  // Older requests are ignored when a newer session
-  // selection/new-chat operation occurs.
+  // Used to make sure an old session-loading request
+  // cannot overwrite a newer session selection.
   const sessionLoadRef =
     useRef(0);
 
@@ -333,14 +340,17 @@ export default function Chat() {
   }, []);
 
   // ------------------------------------------------------------
-  // INITIAL CHAT HISTORY
+  // INITIAL LOAD
+  //
+  // IMPORTANT:
+  // We ONLY load the session list here.
+  //
+  // We DO NOT automatically open the most recent chat.
+  // The user starts with a fresh unsaved chat.
   // ------------------------------------------------------------
 
   useEffect(() => {
     let cancelled = false;
-
-    const initialLoadId =
-      ++sessionLoadRef.current;
 
     const loadChatHistory =
       async () => {
@@ -354,34 +364,31 @@ export default function Chat() {
           if (!cancelled) {
             setIsFetchingHistory(false);
           }
+
           return;
         }
 
         const {
           data: allSessions,
           error: sessionsError,
-        } = await supabase
-          .from('chat_sessions')
-          .select(
-            'id, title, created_at'
-          )
-          .eq(
-            'user_id',
-            user.id
-          )
-          .order(
-            'created_at',
-            {
-              ascending: false,
-            }
-          );
+        } =
+          await supabase
+            .from('chat_sessions')
+            .select(
+              'id, title, created_at'
+            )
+            .eq(
+              'user_id',
+              user.id
+            )
+            .order(
+              'created_at',
+              {
+                ascending: false,
+              }
+            );
 
-        // Another operation has taken control.
-        if (
-          cancelled ||
-          initialLoadId !==
-            sessionLoadRef.current
-        ) {
+        if (cancelled) {
           return;
         }
 
@@ -392,72 +399,25 @@ export default function Chat() {
           );
 
           setSessions([]);
-          setActiveSessionId(null);
-          setMessages([]);
           setIsFetchingHistory(false);
 
           return;
         }
 
-        if (
-          !allSessions ||
-          allSessions.length === 0
-        ) {
-          setSessions([]);
-          setActiveSessionId(null);
-          setMessages([]);
-          setIsFetchingHistory(false);
+        // IMPORTANT:
+        // We intentionally do NOT do:
+        //
+        // setActiveSessionId(allSessions[0].id)
+        //
+        // because the user should start with a
+        // completely fresh chat after login.
 
-          return;
-        }
-
-        const firstSessionId =
-          allSessions[0].id;
-
-        const {
-          data: dbMessages,
-          error: messagesError,
-        } = await supabase
-          .from('messages')
-          .select(
-            'id, role, content'
-          )
-          .eq(
-            'session_id',
-            firstSessionId
-          )
-          .order(
-            'created_at',
-            {
-              ascending: true,
-            }
-          );
-
-        if (
-          cancelled ||
-          initialLoadId !==
-            sessionLoadRef.current
-        ) {
-          return;
-        }
-
-        if (messagesError) {
-          console.error(
-            'Failed to load messages:',
-            messagesError
-          );
-        }
-
-        setSessions(allSessions);
-
-        setActiveSessionId(
-          firstSessionId
+        setSessions(
+          allSessions || []
         );
 
-        setMessages(
-          (dbMessages ||
-            []) as Message[]
-        );
+        setActiveSessionId(null);
+        setMessages([]);
 
         setIsFetchingHistory(false);
       };
@@ -470,15 +430,13 @@ export default function Chat() {
   }, [supabase]);
 
   // ------------------------------------------------------------
-  // LOAD SPECIFIC SESSION
+  // LOAD SPECIFIC HISTORICAL SESSION
   // ------------------------------------------------------------
 
   const loadSpecificSession =
     async (
       sessionId: string
     ) => {
-      // Do not switch sessions during
-      // an active AI response.
       if (isLoading) {
         return;
       }
@@ -494,34 +452,36 @@ export default function Chat() {
 
       setActiveTab('chat');
 
-      // Immediately mark this as the active session.
       setActiveSessionId(
         sessionId
       );
 
       setIsFetchingHistory(true);
+
       setMessages([]);
 
       const {
         data: dbMessages,
         error,
-      } = await supabase
-        .from('messages')
-        .select(
-          'id, role, content'
-        )
-        .eq(
-          'session_id',
-          sessionId
-        )
-        .order(
-          'created_at',
-          {
-            ascending: true,
-          }
-        );
+      } =
+        await supabase
+          .from('messages')
+          .select(
+            'id, role, content'
+          )
+          .eq(
+            'session_id',
+            sessionId
+          )
+          .order(
+            'created_at',
+            {
+              ascending: true,
+            }
+          );
 
-      // User selected a newer session.
+      // If another session was selected while
+      // this request was running, ignore this result.
       if (
         requestId !==
         sessionLoadRef.current
@@ -577,72 +537,29 @@ export default function Chat() {
 
   // ------------------------------------------------------------
   // NEW CHAT
+  //
+  // IMPORTANT:
+  // We DO NOT create a database session here.
+  //
+  // We simply move the UI into a fresh unsaved chat.
+  // The session will be created when the first message
+  // is actually sent.
   // ------------------------------------------------------------
 
   const handleNewChat =
-    async () => {
+    () => {
       if (isLoading) {
         return;
       }
 
-      // Invalidate pending history requests.
+      // Invalidate any session-loading request.
       sessionLoadRef.current += 1;
 
-      const {
-        data: { user },
-      } =
-        await supabase.auth.getUser();
-
-      if (!user) {
-        setIsFetchingHistory(false);
-        return;
-      }
-
-      setIsFetchingHistory(true);
-
-      const {
-        data: newSession,
-        error,
-      } = await supabase
-        .from('chat_sessions')
-        .insert([
-          {
-            user_id:
-              user.id,
-            title:
-              'New Engineering Chat',
-          },
-        ])
-        .select(
-          'id, title, created_at'
-        )
-        .single();
-
-      if (
-        error ||
-        !newSession
-      ) {
-        console.error(
-          'Failed to create chat session:',
-          error
-        );
-
-        setIsFetchingHistory(false);
-        return;
-      }
-
-      setSessions(
-        (prev) => [
-          newSession,
-          ...prev,
-        ]
-      );
-
-      setActiveSessionId(
-        newSession.id
-      );
+      setActiveSessionId(null);
 
       setMessages([]);
+
+      setMyInput('');
 
       setActiveTab('chat');
 
@@ -755,16 +672,16 @@ export default function Chat() {
         return;
       }
 
-      // Capture the session ID ONCE.
+      // Capture the currently active session.
+      //
+      // For a fresh chat this will be null.
+      // In that case we create the session below.
       let sessionId =
         activeSessionId;
 
       // --------------------------------------------------------
-      // IMPORTANT FIX:
-      //
-      // We do NOT block the user because isFetchingHistory is
-      // true. If there is currently no active session, create
-      // one here and use its exact ID for this request.
+      // CREATE SESSION ONLY WHEN THE USER ACTUALLY SENDS
+      // THE FIRST MESSAGE.
       // --------------------------------------------------------
 
       if (!sessionId) {
@@ -816,13 +733,11 @@ export default function Chat() {
           return;
         }
 
-        // Prevent an older history request from
-        // changing the session we just created.
-        sessionLoadRef.current += 1;
-
+        // This new session now becomes the active session.
         sessionId =
           newSession.id;
 
+        // Put it at the top of the sidebar.
         setSessions(
           (prev) => [
             newSession,
@@ -834,17 +749,13 @@ export default function Chat() {
           newSession.id
         );
 
-        setMessages([]);
-
-        setActiveTab('chat');
-
-        setIsFetchingHistory(
-          false
-        );
+        // This operation invalidates any old
+        // session-loading request.
+        sessionLoadRef.current += 1;
       }
 
       // --------------------------------------------------------
-      // CREATE LOCAL USER MESSAGE
+      // LOCAL USER MESSAGE
       // --------------------------------------------------------
 
       const userMsg: Message =
@@ -893,8 +804,6 @@ export default function Chat() {
                     userMsg,
                   ],
 
-                  // Exact session captured for
-                  // this request.
                   sessionId,
                 }
               ),
@@ -990,7 +899,7 @@ export default function Chat() {
             )
         );
 
-        // Keep sidebar title synchronized.
+        // Update sidebar title locally.
         const shortTitle =
           input.length > 25
             ? `${input.substring(
@@ -1123,6 +1032,10 @@ export default function Chat() {
       });
     };
 
+  // ------------------------------------------------------------
+  // RENDER
+  // ------------------------------------------------------------
+
   return (
     <div
       className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${
@@ -1165,6 +1078,7 @@ export default function Chat() {
       </button>
 
       {/* MOBILE OVERLAY */}
+
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity"
@@ -1189,6 +1103,8 @@ export default function Chat() {
             : 'w-[260px] -translate-x-full md:translate-x-0 md:w-[64px]'
         }`}
       >
+        {/* HEADER */}
+
         <div className="h-[64px] flex items-center shrink-0">
           <div className="w-[64px] shrink-0" />
 
@@ -1208,6 +1124,7 @@ export default function Chat() {
         </div>
 
         {/* NEW CHAT */}
+
         <div className="px-3 py-2 shrink-0 relative group flex justify-center md:justify-start">
           <button
             onClick={handleNewChat}
@@ -1262,6 +1179,7 @@ export default function Chat() {
         </div>
 
         {/* TOOLS */}
+
         <div className="mt-2 px-3 space-y-1">
           <h3
             className={`text-[12px] font-medium px-2 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${
@@ -1276,6 +1194,8 @@ export default function Chat() {
           >
             Tools
           </h3>
+
+          {/* AI ASSISTANT */}
 
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
@@ -1332,6 +1252,8 @@ export default function Chat() {
               </div>
             )}
           </div>
+
+          {/* CALCULATOR */}
 
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
@@ -1394,6 +1316,7 @@ export default function Chat() {
         </div>
 
         {/* CHAT HISTORY */}
+
         <div className="flex-1 overflow-y-auto overflow-x-hidden mt-2 px-3 space-y-0.5 pb-4">
           <h3
             className={`text-[12px] font-medium px-2 mt-4 mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${
@@ -1409,7 +1332,8 @@ export default function Chat() {
             Recent
           </h3>
 
-          {sessions.length === 0 &&
+          {sessions.length ===
+            0 &&
           !isFetchingHistory &&
           isSidebarOpen ? (
             <div className="text-slate-500 text-[13px] px-3 mt-2 whitespace-nowrap">
@@ -1497,7 +1421,8 @@ export default function Chat() {
           )}
         </div>
 
-        {/* FOOTER / SETTINGS */}
+        {/* SETTINGS */}
+
         <div className="p-3 shrink-0 flex flex-col gap-1 relative">
           {isSettingsOpen && (
             <div
@@ -1629,7 +1554,7 @@ export default function Chat() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.528.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.25-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.397.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z"
+                  d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.528.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894Z"
                 />
 
                 <path
@@ -1686,7 +1611,7 @@ export default function Chat() {
         </div>
 
         {/* -------------------------------------------------- */}
-        {/* CHAT VIEW */}
+        {/* CHAT */}
         {/* -------------------------------------------------- */}
 
         {activeTab === 'chat' && (
@@ -1765,6 +1690,7 @@ export default function Chat() {
             </div>
 
             {/* FLOATING INPUT */}
+
             <div
               className={`absolute bottom-0 left-0 w-full pt-6 pb-6 px-4 md:px-8 bg-gradient-to-t ${
                 isDarkMode
@@ -1865,8 +1791,7 @@ export default function Chat() {
                     placeholder="Ask about codes, mix proportions, or loads..."
                     onChange={(e) =>
                       setMyInput(
-                        e.target
-                          .value
+                        e.target.value
                       )
                     }
                     onKeyDown={(e) => {
@@ -1880,8 +1805,6 @@ export default function Chat() {
                         customHandleSubmit();
                       }
                     }}
-                    // IMPORTANT:
-                    // History loading no longer disables typing.
                     disabled={
                       isLoading
                     }
@@ -1972,6 +1895,8 @@ export default function Chat() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+                  {/* INPUTS */}
+
                   <div className="space-y-5">
                     <div>
                       <label
@@ -2003,12 +1928,15 @@ export default function Chat() {
                         <option value={20}>
                           M20
                         </option>
+
                         <option value={25}>
                           M25
                         </option>
+
                         <option value={30}>
                           M30
                         </option>
+
                         <option value={40}>
                           M40
                         </option>
@@ -2093,7 +2021,9 @@ export default function Chat() {
                         <input
                           type="number"
                           step="0.01"
-                          value={sgCement}
+                          value={
+                            sgCement
+                          }
                           onChange={(e) =>
                             setSgCement(
                               Number(
@@ -2123,7 +2053,9 @@ export default function Chat() {
 
                         <input
                           type="number"
-                          value={waterContent}
+                          value={
+                            waterContent
+                          }
                           onChange={(e) =>
                             setWaterContent(
                               Number(
@@ -2154,6 +2086,8 @@ export default function Chat() {
                       Calculate Proportions
                     </button>
                   </div>
+
+                  {/* RESULTS */}
 
                   <div
                     className={`rounded-[24px] p-8 h-full transition-colors border ${

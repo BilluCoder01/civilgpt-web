@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -952,6 +953,75 @@ export default function Chat() {
     };
 
   // ------------------------------------------------------------
+  // TEMPORARY IS 10262 RECOVERY TEST
+  // ------------------------------------------------------------
+
+  const prepareExistingStandard =
+    async () => {
+      if (isUploading || isLoading) {
+        return;
+      }
+
+      setIsUploading(true);
+      setUploadStatus(null);
+
+      try {
+        const response =
+          await fetch(
+            "/api/standards/prepare-existing",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify({
+                standardId:
+                  "d239e0b7-bb9e-4b48-9de2-ae544c8fe6aa",
+                storagePath:
+                  "c54f9e53-0a42-426e-a31b-a4e88f11f62f/f1b492ed-a010-4bb4-9622-1f32ca5f2c16-is.10262.2009.pdf",
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Failed to prepare IS 10262."
+          );
+        }
+
+        setUploadStatus({
+          type: "success",
+          message:
+            `IS 10262 prepared: ${
+              data.pageCount ?? "?"
+            } pages, ${
+              data.totalChunks ?? "?"
+            } chunks ready for batch embedding.`,
+        });
+      } catch (error) {
+        console.error(
+          "IS 10262 preparation failed:",
+          error
+        );
+
+        setUploadStatus({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to prepare IS 10262.",
+        });
+      } finally {
+        setIsUploading(false);
+      }
+    };
+
+  // ------------------------------------------------------------
   // REMOVE PDF VISUAL CHIP
   // ------------------------------------------------------------
 
@@ -1233,76 +1303,6 @@ export default function Chat() {
         );
       } finally {
         setIsLoading(false);
-      }
-    };
-
-  // ------------------------------------------------------------
-  // TEMPORARY: PREPARE EXISTING IS 10262 PDF
-  // ------------------------------------------------------------
-
-  const prepareExistingStandard =
-    async () => {
-      if (isUploading || isLoading) {
-        return;
-      }
-
-      setIsUploading(true);
-      setUploadStatus(null);
-
-      try {
-        const response =
-          await fetch(
-            "/api/standards/prepare-existing",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                standardId:
-                  "d239e0b7-bb9e-4b48-9de2-ae544c8fe6aa",
-                storagePath:
-                  "c54f9e53-0a42-426e-a31b-a4e88f11f62f/f1b492ed-a010-4bb4-9622-1f32ca5f2c16-is.10262.2009.pdf",
-              }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              "Failed to prepare IS 10262."
-          );
-        }
-
-        console.log(
-          "IS 10262 preparation result:",
-          data
-        );
-
-        setUploadStatus({
-          type: "success",
-          message:
-            `IS 10262 prepared: ${data.totalChunks ?? 0} chunks, ${data.pageCount ?? 0} pages.`,
-        });
-      } catch (error) {
-        console.error(
-          "Failed to prepare existing standard:",
-          error
-        );
-
-        setUploadStatus({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to prepare IS 10262.",
-        });
-      } finally {
-        setIsUploading(false);
       }
     };
 
@@ -1967,25 +1967,6 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* TEMPORARY IS 10262 RECOVERY TEST */}
-
-            <div className="max-w-3xl mx-auto w-full px-4 md:px-0 mb-4">
-              <button
-                type="button"
-                onClick={prepareExistingStandard}
-                disabled={isUploading || isLoading}
-                className={`px-4 py-2 rounded-xl text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isDarkMode
-                    ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
-                    : "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                }`}
-              >
-                {isUploading
-                  ? "Preparing IS 10262…"
-                  : "Prepare existing IS 10262"}
-              </button>
-            </div>
-
             {/* UPLOAD DIALOG */}
 
             {showUploadDialog && (
@@ -2227,6 +2208,30 @@ export default function Chat() {
               }`}
             >
               <div className="max-w-3xl mx-auto w-full">
+                {/* TEMPORARY IS 10262 RECOVERY TEST */}
+
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={
+                      prepareExistingStandard
+                    }
+                    disabled={
+                      isUploading ||
+                      isLoading
+                    }
+                    className={`px-4 py-2 rounded-xl text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isDarkMode
+                        ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+                        : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                    }`}
+                  >
+                    {isUploading
+                      ? "Preparing IS 10262…"
+                      : "Prepare existing IS 10262"}
+                  </button>
+                </div>
+
                 {/* PDF ATTACHMENT */}
 
                 {uploadedPdfName && (

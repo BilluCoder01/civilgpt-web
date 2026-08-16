@@ -37,8 +37,7 @@ const supabaseAdmin = createClient(
   supabaseServiceKey
 );
 
-const STORAGE_BUCKET =
-  "civilgpt-pdfs";
+const STORAGE_BUCKET = "civilgpt-pdfs";
 
 // ============================================================
 // TYPES
@@ -79,19 +78,17 @@ type ParsedStandardChunk = {
 };
 
 // ============================================================
-// PDF EXTRACTION
+// PDF PARSER
 // ============================================================
 
 async function createPdfParser(
   buffer: Buffer
 ) {
-  const { CanvasFactory } = await import(
-    "pdf-parse/worker"
-  );
+  const { CanvasFactory } =
+    await import("pdf-parse/worker");
 
-  const { PDFParse } = await import(
-    "pdf-parse"
-  );
+  const { PDFParse } =
+    await import("pdf-parse");
 
   return {
     PDFParse,
@@ -100,18 +97,17 @@ async function createPdfParser(
   };
 }
 
-/**
- * Reads page count from pdf-parse.
- */
+// ============================================================
+// GET PAGE COUNT
+// ============================================================
+
 async function getPdfPageCount(
   buffer: Buffer
 ): Promise<number> {
   const {
     PDFParse,
     CanvasFactory,
-  } = await createPdfParser(
-    buffer
-  );
+  } = await createPdfParser(buffer);
 
   const parser = new PDFParse({
     data: buffer,
@@ -124,23 +120,16 @@ async function getPdfPageCount(
         parsePageInfo: true,
       });
 
-    return Number(
-      result.total || 0
-    );
+    return Number(result.total || 0);
   } finally {
     await parser.destroy();
   }
 }
 
-/**
- * Extract text from one page.
- *
- * pdf-parse v2 supports:
- *
- * parser.getText({ partial: [pageNumber] })
- *
- * where pages are 1-indexed.
- */
+// ============================================================
+// EXTRACT SINGLE PAGE
+// ============================================================
+
 async function extractSinglePageText(
   buffer: Buffer,
   pageNumber: number
@@ -148,9 +137,7 @@ async function extractSinglePageText(
   const {
     PDFParse,
     CanvasFactory,
-  } = await createPdfParser(
-    buffer
-  );
+  } = await createPdfParser(buffer);
 
   const parser = new PDFParse({
     data: buffer,
@@ -160,9 +147,7 @@ async function extractSinglePageText(
   try {
     const result =
       await parser.getText({
-        partial: [
-          pageNumber,
-        ],
+        partial: [pageNumber],
       });
 
     return result.text || "";
@@ -184,44 +169,30 @@ function getDocumentHash(
 }
 
 // ============================================================
-// TEXT HELPERS
+// TEXT NORMALIZATION
 // ============================================================
 
 function normalizeWhitespace(
   text: string
 ): string {
   return text
-    .replace(
-      /\u0000/g,
-      ""
-    )
-    .replace(
-      /\r\n/g,
-      "\n"
-    )
-    .replace(
-      /\r/g,
-      "\n"
-    )
-    .replace(
-      /[ \t]+/g,
-      " "
-    )
+    .replace(/\u0000/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
     .trim();
 }
 
-/**
- * Converts a page's text into reasonably sized chunks while
- * preserving line boundaries where possible.
- */
-function chunkPageText(
+// ============================================================
+// ENGINEERING PDF CHUNKING
+// ============================================================
+
+function chunkText(
   text: string,
   maxCharacters = 1000
 ): string[] {
   const normalized =
-    normalizeWhitespace(
-      text
-    );
+    normalizeWhitespace(text);
 
   if (!normalized) {
     return [];
@@ -230,18 +201,14 @@ function chunkPageText(
   const lines =
     normalized
       .split("\n")
-      .map((line) =>
-        line.trim()
-      )
+      .map((line) => line.trim())
       .filter(Boolean);
 
   const chunks: string[] = [];
 
   let current = "";
 
-  for (
-    const line of lines
-  ) {
+  for (const line of lines) {
     const candidate =
       current.length === 0
         ? line
@@ -251,20 +218,16 @@ function chunkPageText(
       candidate.length <=
       maxCharacters
     ) {
-      current =
-        candidate;
+      current = candidate;
       continue;
     }
 
-    if (
-      current.length > 0
-    ) {
+    if (current.length > 0) {
       chunks.push(
         current.trim()
       );
     }
 
-    // Extremely long individual line.
     if (
       line.length >
       maxCharacters
@@ -277,8 +240,7 @@ function chunkPageText(
         chunks.push(
           line.substring(
             i,
-            i +
-              maxCharacters
+            i + maxCharacters
           )
         );
       }
@@ -289,9 +251,7 @@ function chunkPageText(
     }
   }
 
-  if (
-    current.length > 0
-  ) {
+  if (current.length > 0) {
     chunks.push(
       current.trim()
     );
@@ -301,43 +261,39 @@ function chunkPageText(
 }
 
 // ============================================================
-// CODE STRUCTURE DETECTION
+// CLAUSE DETECTION
 // ============================================================
 
 function detectClauseHeading(
   line: string
 ): {
   clause: string;
-  title: string | null;
+  title: string;
 } | null {
   const value =
     line
-      .replace(
-        /\s+/g,
-        " "
-      )
+      .replace(/\s+/g, " ")
       .trim();
 
   /*
-   * Matches common IS-code clause headings such as:
+   * Valid:
    *
-   * 5
-   * 5 Design Requirements
-   * 5.2
-   * 5.2 Water Content
-   * 5.2.1 General
-   * 5.2.1.1 Something
+   * 4 Design requirements
+   * 4.2 Water content
+   * 4.2.1 General
+   * 4.2.1.1 Maximum water content
    *
-   * We intentionally avoid treating a line like:
+   * Invalid:
    *
-   * 20 30 40 50
-   *
-   * as a clause.
+   * 11.81 in STAAD units
+   * 65.0 kN at the supports
+   * 130 kN = sum of reactions
+   * 21,718,492.207 kN/m²
    */
 
   const match =
     value.match(
-      /^(\d+(?:\.\d+){0,4})(?:\s+|$)(.*)$/
+      /^(\d+(?:\.\d+){0,4})\s+(.+)$/
     );
 
   if (!match) {
@@ -345,29 +301,61 @@ function detectClauseHeading(
   }
 
   const clause =
-    match[1];
+    match[1].trim();
 
   const title =
-    match[2]?.trim() ||
-    null;
+    match[2].trim();
 
-  // Reject things that look like pure numeric data.
-  if (
-    !title &&
-    clause.includes(".")
-  ) {
-    return {
-      clause,
-      title: null,
-    };
+  if (!title) {
+    return null;
   }
 
+  // Must contain meaningful alphabetic text.
+  if (!/[A-Za-z]/.test(title)) {
+    return null;
+  }
+
+  // Reject obvious measurement/value lines.
   if (
-    title &&
-    /^[\d\s.,%+\-/:()]+$/.test(
+    /^\d+(?:\.\d+)?\s*(?:kN|N|mm|cm|m|km|kg|g|MPa|kPa|Pa|GPa|kN\/m|kN\/m²|m²|m³|%|Hz|V|A|s|min|sec)\b/i.test(
       title
     )
   ) {
+    return null;
+  }
+
+  // Reject values such as:
+  // 11.81 in STAAD units
+  if (
+    /^\d+(?:\.\d+)?\s*(?:in|inch|inches)\b/i.test(
+      title
+    )
+  ) {
+    return null;
+  }
+
+  // Reject lines beginning with a raw numerical value
+  // followed by engineering language.
+  if (
+    /^\d+(?:\.\d+)?\s+(?:at|from|to|of|in|using|with|per|for)\b/i.test(
+      title
+    )
+  ) {
+    return null;
+  }
+
+  // Reject obvious equations/calculations.
+  if (
+    /[=×−+]/.test(title)
+  ) {
+    return null;
+  }
+
+  // Avoid unreasonable clause depth.
+  const depth =
+    clause.split(".").length;
+
+  if (depth > 5) {
     return null;
   }
 
@@ -376,6 +364,10 @@ function detectClauseHeading(
     title,
   };
 }
+
+// ============================================================
+// TABLE DETECTION
+// ============================================================
 
 function detectTable(
   line: string
@@ -393,6 +385,10 @@ function detectTable(
     : null;
 }
 
+// ============================================================
+// FIGURE DETECTION
+// ============================================================
+
 function detectFigure(
   line: string
 ): string | null {
@@ -409,6 +405,10 @@ function detectFigure(
     : null;
 }
 
+// ============================================================
+// ANNEX DETECTION
+// ============================================================
+
 function detectAnnex(
   line: string
 ): string | null {
@@ -417,23 +417,26 @@ function detectAnnex(
 
   const match =
     value.match(
-      /^(?:annex)\s+([A-Za-z](?:\s*[-–—]\s*.*)?)/i
+      /^(?:annex)\s+([A-Za-z])(?:\s*[-–—:]?\s*(.*))?$/i
     );
 
-  return match
-    ? match[1].trim()
-    : null;
+  if (!match) {
+    return null;
+  }
+
+  return match[1].trim();
 }
+
+// ============================================================
+// SECTION TITLE DETECTION
+// ============================================================
 
 function detectSectionTitle(
   line: string
 ): string | null {
   const value =
     line
-      .replace(
-        /\s+/g,
-        " "
-      )
+      .replace(/\s+/g, " ")
       .trim();
 
   if (
@@ -443,34 +446,29 @@ function detectSectionTitle(
     return null;
   }
 
-  // Don't treat tables/figures/annexes as generic sections.
   if (
-    /^table\s+/i.test(
-      value
-    ) ||
-    /^figure\s+/i.test(
-      value
-    ) ||
-    /^fig\.\s+/i.test(
-      value
-    ) ||
-    /^annex\s+/i.test(
-      value
-    )
+    /^table\s+/i.test(value) ||
+    /^figure\s+/i.test(value) ||
+    /^fig\.\s+/i.test(value) ||
+    /^annex\s+/i.test(value)
   ) {
     return null;
   }
 
-  const looksLikeHeading =
+  /*
+   * We only treat clearly heading-like lines as generic
+   * section titles.
+   *
+   * This prevents regular body sentences from becoming
+   * citation headings.
+   */
+
+  const isUppercaseHeading =
     value ===
       value.toUpperCase() &&
-    /[A-Z]/.test(
-      value
-    );
+    /[A-Z]/.test(value);
 
-  if (
-    looksLikeHeading
-  ) {
+  if (isUppercaseHeading) {
     return value;
   }
 
@@ -478,7 +476,45 @@ function detectSectionTitle(
 }
 
 // ============================================================
-// STANDARD PAGE PARSER
+// CLAUSE SPLITTER
+// ============================================================
+
+function splitClauseNumber(
+  fullClause: string
+): {
+  clauseNo: string | null;
+  subClauseNo: string | null;
+} {
+  const parts =
+    fullClause
+      .split(".")
+      .map((part) =>
+        part.trim()
+      )
+      .filter(Boolean);
+
+  if (parts.length === 0) {
+    return {
+      clauseNo: null,
+      subClauseNo: null,
+    };
+  }
+
+  return {
+    clauseNo:
+      parts[0] || null,
+
+    subClauseNo:
+      parts.length > 1
+        ? parts
+            .slice(1)
+            .join(".")
+        : null,
+  };
+}
+
+// ============================================================
+// PAGE PARSER
 // ============================================================
 
 function parsePageIntoChunks(
@@ -487,13 +523,6 @@ function parsePageIntoChunks(
   startingChunkIndex: number
 ): {
   chunks: ParsedStandardChunk[];
-  state: {
-    clauseNo: string | null;
-    tableNo: string | null;
-    figureNo: string | null;
-    annexNo: string | null;
-    sectionTitle: string | null;
-  };
   nextChunkIndex: number;
 } {
   const normalized =
@@ -504,13 +533,6 @@ function parsePageIntoChunks(
   if (!normalized) {
     return {
       chunks: [],
-      state: {
-        clauseNo: null,
-        tableNo: null,
-        figureNo: null,
-        annexNo: null,
-        sectionTitle: null,
-      },
       nextChunkIndex:
         startingChunkIndex,
     };
@@ -525,6 +547,10 @@ function parsePageIntoChunks(
       .filter(Boolean);
 
   let clauseNo:
+    | string
+    | null = null;
+
+  let subClauseNo:
     | string
     | null = null;
 
@@ -544,17 +570,15 @@ function parsePageIntoChunks(
     | string
     | null = null;
 
-  /*
-   * We maintain citation state while reading the page.
-   * Every chunk gets the most recent applicable citation
-   * context.
-   */
-
   const annotatedLines:
     Array<{
       text: string;
 
       clauseNo:
+        | string
+        | null;
+
+      subClauseNo:
         | string
         | null;
 
@@ -575,70 +599,66 @@ function parsePageIntoChunks(
         | null;
     }> = [];
 
-  for (
-    const line of rawLines
-  ) {
+  for (const line of rawLines) {
     const clause =
-      detectClauseHeading(
-        line
-      );
+      detectClauseHeading(line);
 
     if (clause) {
-      clauseNo =
-        clause.clause;
+      const split =
+        splitClauseNumber(
+          clause.clause
+        );
 
-      if (
-        clause.title
-      ) {
-        sectionTitle =
-          clause.title;
-      }
+      clauseNo =
+        split.clauseNo;
+
+      subClauseNo =
+        split.subClauseNo;
+
+      sectionTitle =
+        clause.title;
     }
 
     const table =
-      detectTable(
-        line
-      );
+      detectTable(line);
 
     if (table) {
-      tableNo =
-        table;
+      tableNo = table;
     }
 
     const figure =
-      detectFigure(
-        line
-      );
+      detectFigure(line);
 
     if (figure) {
-      figureNo =
-        figure;
+      figureNo = figure;
     }
 
     const annex =
-      detectAnnex(
-        line
-      );
+      detectAnnex(line);
 
     if (annex) {
-      annexNo =
-        annex;
+      annexNo = annex;
     }
 
-    const section =
+    const genericSection =
       detectSectionTitle(
         line
       );
 
-    if (section) {
+    if (
+      genericSection &&
+      !clause
+    ) {
       sectionTitle =
-        section;
+        genericSection;
     }
 
     annotatedLines.push({
       text: line,
 
       clauseNo,
+
+      subClauseNo,
 
       tableNo,
 
@@ -650,7 +670,8 @@ function parsePageIntoChunks(
     });
   }
 
-  const pageChunks: ParsedStandardChunk[] =
+  const chunks:
+    ParsedStandardChunk[] =
     [];
 
   let currentLines: string[] =
@@ -659,6 +680,10 @@ function parsePageIntoChunks(
   let currentCitation:
     | {
         clauseNo:
+          | string
+          | null;
+
+        subClauseNo:
           | string
           | null;
 
@@ -680,7 +705,7 @@ function parsePageIntoChunks(
       }
     | null = null;
 
-  const flush =
+  const flushChunk =
     () => {
       if (
         currentLines.length ===
@@ -699,12 +724,12 @@ function parsePageIntoChunks(
         return;
       }
 
-      pageChunks.push({
+      chunks.push({
         content,
 
         chunk_index:
           startingChunkIndex +
-          pageChunks.length,
+          chunks.length,
 
         page_number:
           pageNumber,
@@ -715,6 +740,8 @@ function parsePageIntoChunks(
           null,
 
         sub_clause_no:
+          currentCitation
+            ?.subClauseNo ??
           null,
 
         table_no:
@@ -741,17 +768,14 @@ function parsePageIntoChunks(
       currentLines = [];
     };
 
-  for (
-    const annotated of annotatedLines
-  ) {
-    const line =
-      annotated.text;
-
+  for (const annotated of annotatedLines) {
     const citationChanged =
       currentCitation ===
         null ||
       currentCitation.clauseNo !==
         annotated.clauseNo ||
+      currentCitation.subClauseNo !==
+        annotated.subClauseNo ||
       currentCitation.tableNo !==
         annotated.tableNo ||
       currentCitation.figureNo !==
@@ -761,12 +785,6 @@ function parsePageIntoChunks(
       currentCitation.sectionTitle !==
         annotated.sectionTitle;
 
-    /*
-     * Start a new semantic chunk when:
-     *
-     * 1. citation context changes, or
-     * 2. current chunk approaches the character limit.
-     */
     const currentLength =
       currentLines
         .join("\n")
@@ -774,30 +792,31 @@ function parsePageIntoChunks(
 
     if (
       citationChanged &&
-      currentLines.length >
-        0
+      currentLines.length > 0
     ) {
-      flush();
+      flushChunk();
     }
 
     if (
-      currentLines.length >
-        0 &&
+      currentLines.length > 0 &&
       currentLength +
-        line.length +
+        annotated.text.length +
         1 >
         1000
     ) {
-      flush();
+      flushChunk();
     }
 
     currentLines.push(
-      line
+      annotated.text
     );
 
     currentCitation = {
       clauseNo:
         annotated.clauseNo,
+
+      subClauseNo:
+        annotated.subClauseNo,
 
       tableNo:
         annotated.tableNo,
@@ -813,32 +832,18 @@ function parsePageIntoChunks(
     };
   }
 
-  flush();
+  flushChunk();
 
   return {
-    chunks:
-      pageChunks,
-
-    state: {
-      clauseNo,
-
-      tableNo,
-
-      figureNo,
-
-      annexNo,
-
-      sectionTitle,
-    },
-
+    chunks,
     nextChunkIndex:
       startingChunkIndex +
-      pageChunks.length,
+      chunks.length,
   };
 }
 
 // ============================================================
-// STORAGE
+// STORAGE HELPERS
 // ============================================================
 
 function isUserStoragePath(
@@ -887,7 +892,7 @@ async function deleteStorageFile(
 }
 
 // ============================================================
-// JSON ERROR
+// ERROR RESPONSE
 // ============================================================
 
 function errorResponse(
@@ -917,7 +922,7 @@ export async function POST(
 
   try {
     // ========================================================
-    // AUTH
+    // AUTHENTICATION
     // ========================================================
 
     const cookieStore =
@@ -934,7 +939,7 @@ export async function POST(
             getAll() {
               return cookieStore.getAll();
             },
-          },
+          }
         }
       );
 
@@ -951,7 +956,7 @@ export async function POST(
     }
 
     // ========================================================
-    // JSON REQUEST
+    // REQUEST BODY
     // ========================================================
 
     let body: UploadRequest;
@@ -1037,7 +1042,7 @@ export async function POST(
     }
 
     // ========================================================
-    // STANDARD VALIDATION
+    // STANDARD METADATA VALIDATION
     // ========================================================
 
     const normalizedIsNumber =
@@ -1112,7 +1117,7 @@ export async function POST(
     }
 
     // ========================================================
-    // DOWNLOAD PDF FROM PRIVATE STORAGE
+    // DOWNLOAD FROM STORAGE
     // ========================================================
 
     const {
@@ -1219,20 +1224,17 @@ export async function POST(
             ?.filename ||
           filename;
 
-        return NextResponse.json(
-          {
-            success: true,
-            duplicate:
-              true,
-            uploadType:
-              "engineering",
-            filename:
-              existingFilename,
-            documentHash,
-            message:
-              "This PDF is already in your engineering knowledge base.",
-          }
-        );
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          uploadType:
+            "engineering",
+          filename:
+            existingFilename,
+          documentHash,
+          message:
+            "This PDF is already in your engineering knowledge base.",
+        });
       }
     }
 
@@ -1284,25 +1286,22 @@ export async function POST(
         storagePathForCleanup =
           null;
 
-        return NextResponse.json(
-          {
-            success: true,
-            duplicate:
-              true,
-            uploadType:
-              "standard",
-            filename:
-              existingStandardDocument.filename,
-            documentHash,
-            message:
-              "This IS Standard PDF is already in your standards library.",
-          }
-        );
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          uploadType:
+            "standard",
+          filename:
+            existingStandardDocument.filename,
+          documentHash,
+          message:
+            "This IS Standard PDF is already in your standards library.",
+        });
       }
     }
 
     // ========================================================
-    // ENGINEERING DOCUMENT
+    // ENGINEERING DOCUMENT INGESTION
     // ========================================================
 
     if (
@@ -1329,20 +1328,17 @@ export async function POST(
 
         const cleanFullText =
           normalizeWhitespace(
-            result.text ||
-              ""
+            result.text || ""
           );
 
-        if (
-          !cleanFullText
-        ) {
+        if (!cleanFullText) {
           throw new Error(
             "No readable text was found in the PDF."
           );
         }
 
         const chunks =
-          chunkPageText(
+          chunkText(
             cleanFullText,
             1000
           );
@@ -1441,19 +1437,16 @@ export async function POST(
             storagePathForCleanup =
               null;
 
-            return NextResponse.json(
-              {
-                success: true,
-                duplicate:
-                  true,
-                uploadType:
-                  "engineering",
-                filename,
-                documentHash,
-                message:
-                  "This PDF was already uploaded.",
-              }
-            );
+            return NextResponse.json({
+              success: true,
+              duplicate: true,
+              uploadType:
+                "engineering",
+              filename,
+              documentHash,
+              message:
+                "This PDF was already uploaded.",
+            });
           }
 
           throw insertError;
@@ -1462,22 +1455,19 @@ export async function POST(
         storagePathForCleanup =
           null;
 
-        return NextResponse.json(
-          {
-            success: true,
-            duplicate:
-              false,
-            uploadType:
-              "engineering",
-            filename,
-            documentHash,
-            storagePath,
-            chunks:
-              chunks.length,
-            message:
-              "PDF Memorized.",
-          }
-        );
+        return NextResponse.json({
+          success: true,
+          duplicate: false,
+          uploadType:
+            "engineering",
+          filename,
+          documentHash,
+          storagePath,
+          chunks:
+            chunks.length,
+          message:
+            "PDF Memorized.",
+        });
       } finally {
         await parser.destroy();
       }
@@ -1489,8 +1479,7 @@ export async function POST(
 
     let standardId:
       | string
-      | null =
-      null;
+      | null = null;
 
     const {
       data:
@@ -1596,14 +1585,17 @@ export async function POST(
     }
 
     // ========================================================
-    // CREATE STANDARD DOCUMENT
+    // PAGE COUNT
     // ========================================================
 
-    // First determine page count.
     const pageCount =
       await getPdfPageCount(
         buffer
       );
+
+    // ========================================================
+    // CREATE STANDARD DOCUMENT
+    // ========================================================
 
     const {
       data:
@@ -1658,19 +1650,16 @@ export async function POST(
         storagePathForCleanup =
           null;
 
-        return NextResponse.json(
-          {
-            success: true,
-            duplicate:
-              true,
-            uploadType:
-              "standard",
-            filename,
-            documentHash,
-            message:
-              "This IS Standard PDF is already in your standards library.",
-          }
-        );
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          uploadType:
+            "standard",
+          filename,
+          documentHash,
+          message:
+            "This IS Standard PDF is already in your standards library.",
+        });
       }
 
       throw documentCreateError;
@@ -1687,16 +1676,9 @@ export async function POST(
     let nextChunkIndex =
       0;
 
-    /*
-     * We extract each page separately so that page_number is
-     * real document metadata, not an estimate based on text
-     * length.
-     */
-
     for (
       let pageNumber = 1;
-      pageNumber <=
-        pageCount;
+      pageNumber <= pageCount;
       pageNumber++
     ) {
       const pageText =
@@ -1752,7 +1734,7 @@ export async function POST(
     }
 
     // ========================================================
-    // STANDARD EMBEDDINGS
+    // EMBEDDINGS
     // ========================================================
 
     const {
@@ -1879,47 +1861,42 @@ export async function POST(
     storagePathForCleanup =
       null;
 
-    return NextResponse.json(
-      {
-        success: true,
+    return NextResponse.json({
+      success: true,
 
-        duplicate:
-          false,
+      duplicate: false,
 
-        uploadType:
-          "standard",
+      uploadType:
+        "standard",
 
-        filename,
+      filename,
 
-        documentHash,
+      documentHash,
 
-        storagePath,
+      storagePath,
 
-        standard: {
-          id:
-            standardId,
+      standard: {
+        id:
+          standardId,
 
-          isNumber:
-            normalizedIsNumber,
+        isNumber:
+          normalizedIsNumber,
 
-          title:
-            normalizedTitle,
+        title:
+          normalizedTitle,
 
-          editionYear,
-        },
+        editionYear,
+      },
 
-        pageCount,
+      pageCount,
 
-        chunks:
-          allStandardChunks.length,
+      chunks:
+        allStandardChunks.length,
 
-        message:
-          "IS Standard added to your standards library with page-aware citation metadata.",
-      }
-    );
-  } catch (
-    error: any
-  ) {
+      message:
+        "IS Standard added to your standards library with page-aware citation metadata.",
+    });
+  } catch (error: any) {
     console.error(
       "\n❌ UPLOAD CRASH:",
       error?.message ||

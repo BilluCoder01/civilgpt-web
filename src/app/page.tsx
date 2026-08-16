@@ -37,8 +37,7 @@ type UploadStatus =
 
 type UploadType = "engineering" | "standard";
 
-// Temporary migration/test hook for the already-prepared IS 10262:2009 document.
-// Remove this constant after the batch-ingestion UI is finalized.
+// Temporary: the prepared IS 10262:2009 document currently in the database.
 const EXISTING_STANDARD_DOCUMENT_ID =
   "89ba6142-899d-408c-829b-f9634e2af7d2";
 
@@ -426,6 +425,23 @@ export default function Chat() {
 
   const [uploadStatus, setUploadStatus] =
     useState<UploadStatus>(null);
+
+  const [standardDocumentId, setStandardDocumentId] =
+    useState<string | null>(EXISTING_STANDARD_DOCUMENT_ID);
+
+  const [isProcessingStandard, setIsProcessingStandard] =
+    useState(false);
+
+  const [standardProcessingProgress, setStandardProcessingProgress] =
+    useState<{
+      processed: number;
+      total: number;
+      percent: number;
+    } | null>({
+      processed: 0,
+      total: 146,
+      percent: 0,
+    });
 
   const [isFetchingHistory, setIsFetchingHistory] =
     useState(true);
@@ -1013,6 +1029,29 @@ export default function Chat() {
             file.name
         );
 
+        if (currentUploadType === "standard") {
+          setStandardDocumentId(
+            data.standardDocumentId || null
+          );
+
+          if (data.standardDocumentId) {
+            setStandardProcessingProgress({
+              processed: Number(data.processedChunks) || 0,
+              total: Number(data.totalChunks) || 0,
+              percent: Number(data.totalChunks) > 0
+                ? Math.round(
+                    ((Number(data.processedChunks) || 0) /
+                      Number(data.totalChunks)) *
+                      100
+                  )
+                : 0,
+            });
+          }
+        } else {
+          setStandardDocumentId(null);
+          setStandardProcessingProgress(null);
+        }
+
         if (data.duplicate) {
           setUploadStatus({
             type: "success",
@@ -1058,6 +1097,155 @@ export default function Chat() {
           fileInputRef.current.value =
             "";
         }
+      }
+    };
+
+  // ------------------------------------------------------------
+  // PROCESS STANDARD EMBEDDINGS
+  // ------------------------------------------------------------
+
+  const processStandardEmbeddings =
+    async () => {
+      const documentIdToProcess =
+        standardDocumentId ||
+        EXISTING_STANDARD_DOCUMENT_ID;
+
+      if (isProcessingStandard) {
+        return;
+      }
+
+      setStandardDocumentId(
+        documentIdToProcess
+      );
+
+      setIsProcessingStandard(true);
+      setUploadStatus(null);
+
+      try {
+        let finished = false;
+
+        while (!finished) {
+          const res = await fetch(
+            "/api/standards/process",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                documentId: documentIdToProcess,
+              }),
+            }
+          );
+
+          const responseText =
+            await res.text();
+
+          let data: any = null;
+
+          try {
+            data = responseText
+              ? JSON.parse(responseText)
+              : null;
+          } catch {
+            throw new Error(
+              responseText ||
+                `Processing request failed with status ${res.status}.`
+            );
+          }
+
+          if (data?.processedChunks != null) {
+            const processed =
+              Number(data.processedChunks) || 0;
+            const total =
+              Number(data.totalChunks) || 0;
+            const percent =
+              Number(data.percent) ||
+              (total > 0
+                ? Math.round(
+                    (processed / total) * 100
+                  )
+                : 0);
+
+            setStandardProcessingProgress({
+              processed,
+              total,
+              percent,
+            });
+          }
+
+          if (
+            data?.status ===
+            "completed"
+          ) {
+            setUploadStatus({
+              type: "success",
+              message:
+                `IS Standard ready — ${data.processedChunks}/${data.totalChunks} chunks embedded.`,
+            });
+
+            finished = true;
+            break;
+          }
+
+          if (
+            data?.status ===
+            "paused"
+          ) {
+            setUploadStatus({
+              type: "error",
+              message:
+                "Embedding quota reached. Processing is safely paused. You can resume later without starting over.",
+            });
+
+            finished = true;
+            break;
+          }
+
+          if (!res.ok) {
+            throw new Error(
+              data?.error ||
+                `Standard processing failed with status ${res.status}.`
+            );
+          }
+
+          const processed =
+            Number(data?.processedChunks) || 0;
+          const total =
+            Number(data?.totalChunks) || 0;
+
+          setUploadStatus({
+            type: "success",
+            message:
+              `Processing IS Standard — ${processed}/${total} chunks embedded${
+                total > 0
+                  ? ` (${Math.round((processed / total) * 100)}%)`
+                  : ""
+              }.`,
+          });
+
+          await new Promise((resolve) =>
+            window.setTimeout(
+              resolve,
+              300
+            )
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Standard processing failed:",
+          error
+        );
+
+        setUploadStatus({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to process IS Standard embeddings.",
+        });
+      } finally {
+        setIsProcessingStandard(false);
       }
     };
 
@@ -2248,6 +2436,80 @@ export default function Chat() {
               }`}
             >
               <div className="max-w-3xl mx-auto w-full">
+                {/* STANDARD EMBEDDING CONTROL */}
+
+                <div className="mb-3">
+                      <div
+                        className={`rounded-[18px] border px-4 py-3 shadow-sm ${
+                          isDarkMode
+                            ? "bg-[#1e1f20] border-slate-700"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p
+                              className={`text-[12px] font-semibold ${
+                                isDarkMode
+                                  ? "text-slate-200"
+                                  : "text-slate-800"
+                              }`}
+                            >
+                              IS 10262:2009 embedding
+                            </p>
+                            <p
+                              className={`mt-0.5 text-[11px] ${
+                                isDarkMode
+                                  ? "text-slate-500"
+                                  : "text-slate-500"
+                              }`}
+                            >
+                              {standardProcessingProgress
+                                ? `${standardProcessingProgress.processed}/${standardProcessingProgress.total} chunks`
+                                : "Ready to start"}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={processStandardEmbeddings}
+                            disabled={
+                              isProcessingStandard ||
+                              isLoading
+                            }
+                            className={`shrink-0 px-3.5 py-2 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isDarkMode
+                                ? "bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+                                : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                            }`}
+                          >
+                            {isProcessingStandard
+                              ? "Processing…"
+                              : standardProcessingProgress?.percent === 100
+                              ? "Completed"
+                              : "Process IS 10262"}
+                          </button>
+                        </div>
+
+                        {standardProcessingProgress && (
+                          <div
+                            className={`mt-3 h-1.5 rounded-full overflow-hidden ${
+                              isDarkMode
+                                ? "bg-slate-800"
+                                : "bg-slate-100"
+                            }`}
+                          >
+                            <div
+                              className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                              style={{
+                                width: `${standardProcessingProgress.percent}%`,
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                 {/* PDF ATTACHMENT */}
 
                 {uploadedPdfName && (

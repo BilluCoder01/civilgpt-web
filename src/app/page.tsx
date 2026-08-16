@@ -1064,7 +1064,50 @@ export default function Chat() {
         }
       }
     };
+    
+    const testExistingStandard = async () => {
+  try {
+    const response = await fetch(
+      "/api/standards/prepare-existing",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          standardId:
+            "d239e0b7-bb9e-4b48-9de2-ae544c8fe6aa",
 
+          storagePath:
+            "c54f9e53-0a42-426e-a31b-a4e88f11f62f/f1b492ed-a010-4bb4-9622-1f32ca5f2c16-is.10262.2009.pdf",
+        }),
+      }
+    );
+
+    const data =
+      await response.json();
+
+    console.log(
+      "Standard preparation result:",
+      data
+    );
+
+    alert(
+      data?.message ||
+        data?.error ||
+        "Finished"
+    );
+  } catch (error) {
+    console.error(
+      "Standard preparation failed:",
+      error
+    );
+
+    alert(
+      "Failed to prepare standard."
+    );
+  }
+};
   // ------------------------------------------------------------
   // REMOVE PDF VISUAL CHIP
   // ------------------------------------------------------------

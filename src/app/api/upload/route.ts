@@ -275,22 +275,6 @@ function detectClauseHeading(
       .replace(/\s+/g, " ")
       .trim();
 
-  /*
-   * Valid:
-   *
-   * 4 Design requirements
-   * 4.2 Water content
-   * 4.2.1 General
-   * 4.2.1.1 Maximum water content
-   *
-   * Invalid:
-   *
-   * 11.81 in STAAD units
-   * 65.0 kN at the supports
-   * 130 kN = sum of reactions
-   * 21,718,492.207 kN/m²
-   */
-
   const match =
     value.match(
       /^(\d+(?:\.\d+){0,4})\s+(.+)$/
@@ -310,48 +294,98 @@ function detectClauseHeading(
     return null;
   }
 
-  // Must contain meaningful alphabetic text.
-  if (!/[A-Za-z]/.test(title)) {
+  // ----------------------------------------------------------
+  // A genuine heading should begin with a word, not:
+  // a unit, number, bracket, punctuation, etc.
+  // ----------------------------------------------------------
+
+  if (
+    !/^[A-Za-z]/.test(title)
+  ) {
     return null;
   }
 
-  // Reject obvious measurement/value lines.
+  // ----------------------------------------------------------
+  // Reject units / measurement-based lines.
+  // ----------------------------------------------------------
+
   if (
-    /^\d+(?:\.\d+)?\s*(?:kN|N|mm|cm|m|km|kg|g|MPa|kPa|Pa|GPa|kN\/m|kN\/m²|m²|m³|%|Hz|V|A|s|min|sec)\b/i.test(
+    /^(?:in|mm|cm|m|km|kg|g|kN|N|Pa|kPa|MPa|GPa|Hz|V|A|s|sec|min|hr)\b/i.test(
       title
     )
   ) {
     return null;
   }
 
-  // Reject values such as:
-  // 11.81 in STAAD units
+  // ----------------------------------------------------------
+  // Reject obvious value/calculation continuations.
+  // ----------------------------------------------------------
+
   if (
-    /^\d+(?:\.\d+)?\s*(?:in|inch|inches)\b/i.test(
+    /^(?:at|from|to|of|using|with|per|for)\b/i.test(
       title
     )
   ) {
     return null;
   }
 
-  // Reject lines beginning with a raw numerical value
-  // followed by engineering language.
+  // ----------------------------------------------------------
+  // Reject lines beginning with a numeric measurement
+  // after the clause-like number has been interpreted.
+  // ----------------------------------------------------------
+
   if (
-    /^\d+(?:\.\d+)?\s+(?:at|from|to|of|in|using|with|per|for)\b/i.test(
+    /^\d+(?:\.\d+)?\b/.test(
       title
     )
   ) {
     return null;
   }
 
-  // Reject obvious equations/calculations.
+  // ----------------------------------------------------------
+  // Reject equations/calculations.
+  // ----------------------------------------------------------
+
   if (
-    /[=×−+]/.test(title)
+    /[=×+−]/.test(title)
   ) {
     return null;
   }
 
-  // Avoid unreasonable clause depth.
+  // ----------------------------------------------------------
+  // Reject obvious unit-bearing descriptions.
+  // ----------------------------------------------------------
+
+  if (
+    /\b(?:kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³|kN\/m|kN\/m²)\b/i.test(
+      title
+    ) &&
+    /(?:at|from|to|of|supports?|units?|span|length|load|reaction|moment|deflection)/i.test(
+      title
+    )
+  ) {
+    return null;
+  }
+
+  // ----------------------------------------------------------
+  // Reject broken PDF fragments such as:
+  //
+  // 6.5 m)
+  // 65.0 kN at ...
+  // ----------------------------------------------------------
+
+  if (
+    /^[a-zA-Z]{1,4}\s*[\)\],:]/.test(
+      title
+    )
+  ) {
+    return null;
+  }
+
+  // ----------------------------------------------------------
+  // Clause depth limit.
+  // ----------------------------------------------------------
+
   const depth =
     clause.split(".").length;
 

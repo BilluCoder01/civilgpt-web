@@ -6,12 +6,6 @@ type MixDesignCalculatorProps = {
   isDarkMode: boolean;
 };
 
-type ExposureLimits = {
-  maxWaterBinderRatio: number;
-  minCementitiousContent: number;
-  minGrade: number | null;
-};
-
 type MixResult = {
   targetStrength: number;
 
@@ -55,7 +49,7 @@ type MixResult = {
 
   mixRatio: string;
 
-  yield: number;
+  volumeCheck: number;
 
   cementCheckPassed: boolean;
   maximumCementCheckPassed: boolean;
@@ -87,21 +81,8 @@ const ENTRAPPED_AIR_TABLE: Record<
   40: 0.8,
 };
 
-/*
- * Table 5:
- *
- * Volume of coarse aggregate per unit volume of total aggregate
- * at water-cement/water-cementitious-material ratio = 0.50.
- *
- * IS 10262:2019
- *
- * The code table is:
- *
- *             Zone I   Zone II   Zone III   Zone IV
- * 10 mm        0.48      0.50      0.52       0.54
- * 20 mm        0.60      0.62      0.64       0.66
- * 40 mm        0.69      0.71      0.72       0.73
- */
+// Table 5 coarse aggregate volume fractions
+// at water-cementitious-material ratio = 0.50
 
 const COARSE_AGGREGATE_TABLE: Record<
   10 | 20 | 40,
@@ -136,7 +117,7 @@ const COARSE_AGGREGATE_TABLE: Record<
 };
 
 // ============================================================
-// IS 10262:2019 TABLE 1 — X FACTOR
+// IS 10262:2019 TABLE 1
 // ============================================================
 
 function getXFactor(
@@ -158,7 +139,7 @@ function getXFactor(
 }
 
 // ============================================================
-// IS 10262:2019 TABLE 2 — ASSUMED STANDARD DEVIATION
+// IS 10262:2019 TABLE 2
 // ============================================================
 
 function getAssumedStandardDeviation(
@@ -185,8 +166,7 @@ function getAssumedStandardDeviation(
 }
 
 // ============================================================
-// IS 456 TABLE 5 DURABILITY LIMITS
-// USED BY IS 10262
+// EXPOSURE LIMITS
 // ============================================================
 
 function getExposureLimits(
@@ -194,11 +174,8 @@ function getExposureLimits(
   concreteType:
     | "Reinforced Concrete"
     | "Plain Concrete"
-): ExposureLimits {
-  const reinforced: Record<
-    string,
-    ExposureLimits
-  > = {
+) {
+  const reinforced = {
     Mild: {
       maxWaterBinderRatio: 0.55,
       minCementitiousContent: 300,
@@ -230,10 +207,7 @@ function getExposureLimits(
     },
   };
 
-  const plain: Record<
-    string,
-    ExposureLimits
-  > = {
+  const plain = {
     Mild: {
       maxWaterBinderRatio: 0.60,
       minCementitiousContent: 220,
@@ -267,13 +241,16 @@ function getExposureLimits(
 
   return concreteType ===
     "Reinforced Concrete"
-    ? reinforced[exposure]
-    : plain[exposure];
+    ? reinforced[
+        exposure as keyof typeof reinforced
+      ]
+    : plain[
+        exposure as keyof typeof plain
+      ];
 }
 
 // ============================================================
-// AGGREGATE-SHAPE WATER CORRECTION
-// IS 10262:2019 CLAUSE 5.3
+// AGGREGATE-SHAPE WATER ADJUSTMENT
 // ============================================================
 
 function getAggregateShapeWaterAdjustment(
@@ -314,8 +291,10 @@ export default function MixDesignCalculator({
   const [cementType, setCementType] =
     useState<string>("PPC");
 
-  const [cementStrengthCurve, setCementStrengthCurve] =
-    useState<string>("Curve 2");
+  const [
+    cementStrengthCurve,
+    setCementStrengthCurve,
+  ] = useState<string>("Curve 2");
 
   const [concreteType, setConcreteType] =
     useState<
@@ -323,17 +302,23 @@ export default function MixDesignCalculator({
         "Plain Concrete"
     >("Reinforced Concrete");
 
-  const [maxAggregateSize, setMaxAggregateSize] =
-    useState<10 | 20 | 40>(20);
+  const [
+    maxAggregateSize,
+    setMaxAggregateSize,
+  ] = useState<10 | 20 | 40>(20);
 
-  const [exposureCondition, setExposureCondition] =
-    useState<string>("Severe");
+  const [
+    exposureCondition,
+    setExposureCondition,
+  ] = useState<string>("Severe");
 
   const [slump, setSlump] =
     useState<number>(75);
 
-  const [transportationTime, setTransportationTime] =
-    useState<number>(0);
+  const [
+    transportationTime,
+    setTransportationTime,
+  ] = useState<number>(0);
 
   const [placingMethod, setPlacingMethod] =
     useState<
@@ -344,66 +329,70 @@ export default function MixDesignCalculator({
   const [siteControl, setSiteControl] =
     useState<"Good" | "Fair">("Good");
 
-  const [coarseAggregateType, setCoarseAggregateType] =
-    useState<string>(
-      "Crushed Angular"
-    );
+  const [
+    coarseAggregateType,
+    setCoarseAggregateType,
+  ] = useState<string>(
+    "Crushed Angular"
+  );
 
-  const [fineAggregateType, setFineAggregateType] =
-    useState<string>(
-      "Natural Sand"
-    );
+  const [
+    fineAggregateType,
+    setFineAggregateType,
+  ] = useState<string>(
+    "Natural Sand"
+  );
 
-  const [fineAggregateZone, setFineAggregateZone] =
-    useState<
-      "Zone I" |
-        "Zone II" |
-        "Zone III" |
-        "Zone IV"
-    >("Zone II");
+  const [
+    fineAggregateZone,
+    setFineAggregateZone,
+  ] = useState<
+    "Zone I" |
+      "Zone II" |
+      "Zone III" |
+      "Zone IV"
+  >("Zone II");
 
   // ============================================================
   // ADMIXTURES
   // ============================================================
 
-  const [chemicalAdmixture, setChemicalAdmixture] =
-    useState<string>(
-      "Superplasticizer"
-    );
+  const [
+    chemicalAdmixture,
+    setChemicalAdmixture,
+  ] = useState<string>(
+    "Superplasticizer"
+  );
 
-  const [chemicalAdmixtureSG, setChemicalAdmixtureSG] =
-    useState<number>(1.145);
+  const [
+    chemicalAdmixtureSG,
+    setChemicalAdmixtureSG,
+  ] = useState<number>(1.145);
 
-  const [chemicalAdmixtureDosage, setChemicalAdmixtureDosage] =
-    useState<number>(1.0);
+  const [
+    chemicalAdmixtureDosage,
+    setChemicalAdmixtureDosage,
+  ] = useState<number>(1.0);
 
-  /*
-   * IMPORTANT:
-   * The code gives typical ranges for water reduction.
-   * The Annex A benchmark specifically uses 23% reduction
-   * for its selected superplasticizer at 1% dosage.
-   *
-   * Therefore this is explicitly labelled as a trial/material
-   * value, not as a universal code-prescribed number.
-   */
-  const [trialWaterReduction, setTrialWaterReduction] =
-    useState<number>(23);
+  const [
+    trialWaterReduction,
+    setTrialWaterReduction,
+  ] = useState<number>(23);
 
-  const [mineralAdmixture, setMineralAdmixture] =
-    useState<string>("None");
+  const [
+    mineralAdmixture,
+    setMineralAdmixture,
+  ] = useState<string>("None");
 
-  const [mineralAdmixtureSG, setMineralAdmixtureSG] =
-    useState<number>(2.90);
+  const [
+    mineralAdmixtureSG,
+    setMineralAdmixtureSG,
+  ] = useState<number>(2.90);
 
-  /*
-   * For mineral admixtures this represents percentage of
-   * total cementitious material.
-   *
-   * The exact replacement percentage must be selected based
-   * on project/material requirements and applicable standards.
-   */
-  const [mineralAdmixtureReplacement, setMineralAdmixtureReplacement] =
-    useState<number>(0);
+  const [
+    mineralAdmixtureReplacement,
+    setMineralAdmixtureReplacement,
+  ] = useState<number>(0);
 
   // ============================================================
   // MATERIAL PROPERTIES
@@ -434,30 +423,27 @@ export default function MixDesignCalculator({
   // WATER-CEMENT / CEMENTITIOUS RATIO
   // ============================================================
 
-  /*
-   * This is intentionally an INPUT.
-   *
-   * IS 10262 says preliminary w/c should preferably be obtained
-   * from actual material strength relationship; otherwise
-   * Figure 1 may be used.
-   *
-   * We do not fabricate a mathematical approximation of Figure 1.
-   */
-  const [preliminaryWaterBinderRatio, setPreliminaryWaterBinderRatio] =
-    useState<number>(0.36);
+  const [
+    preliminaryWaterBinderRatio,
+    setPreliminaryWaterBinderRatio,
+  ] = useState<number>(0.36);
 
   // ============================================================
   // STANDARD DEVIATION
   // ============================================================
 
-  const [useAssumedStandardDeviation, setUseAssumedStandardDeviation] =
-    useState<boolean>(true);
+  const [
+    useAssumedStandardDeviation,
+    setUseAssumedStandardDeviation,
+  ] = useState<boolean>(true);
 
-  const [actualStandardDeviation, setActualStandardDeviation] =
-    useState<number>(5.0);
+  const [
+    actualStandardDeviation,
+    setActualStandardDeviation,
+  ] = useState<number>(5.0);
 
   // ============================================================
-  // CALCULATION RESULT
+  // RESULT
   // ============================================================
 
   const [mixResult, setMixResult] =
@@ -466,7 +452,7 @@ export default function MixDesignCalculator({
     );
 
   // ============================================================
-  // DERIVED CODE VALUES
+  // DERIVED VALUES
   // ============================================================
 
   const assumedStandardDeviation =
@@ -511,7 +497,7 @@ export default function MixDesignCalculator({
     );
 
   // ============================================================
-  // CALCULATION
+  // CALCULATE MIX
   // ============================================================
 
   const calculateMix = () => {
@@ -564,7 +550,7 @@ export default function MixDesignCalculator({
       targetMeanStrength;
 
     // ----------------------------------------------------------
-    // STEP 2 — DURABILITY W/C CHECK
+    // STEP 2 — DURABILITY W/B CHECK
     // ----------------------------------------------------------
 
     if (
@@ -583,7 +569,7 @@ export default function MixDesignCalculator({
     }
 
     // ----------------------------------------------------------
-    // STEP 3 — AIR CONTENT FROM TABLE 3
+    // STEP 3 — ENTRAPPED AIR
     // ----------------------------------------------------------
 
     const entrappedAir =
@@ -600,7 +586,6 @@ export default function MixDesignCalculator({
         maxAggregateSize
       ];
 
-    // Aggregate shape adjustment.
     const shapeWaterAdjustment =
       getAggregateShapeWaterAdjustment(
         coarseAggregateType
@@ -610,10 +595,6 @@ export default function MixDesignCalculator({
       tableWater +
       shapeWaterAdjustment;
 
-    // Slump adjustment.
-    //
-    // The code permits approximately ±3% for every
-    // 25 mm deviation from 50 mm slump.
     const slumpSteps =
       (slump - 50) /
       25;
@@ -625,7 +606,7 @@ export default function MixDesignCalculator({
           slumpSteps);
 
     // ----------------------------------------------------------
-    // STEP 5 — CHEMICAL ADMIXTURE WATER REDUCTION
+    // STEP 5 — ADMIXTURE WATER REDUCTION
     // ----------------------------------------------------------
 
     const effectiveWaterReduction =
@@ -640,29 +621,19 @@ export default function MixDesignCalculator({
         effectiveWaterReduction /
           100);
 
-    /*
-     * The published Annex A benchmark rounds 147.52 kg to
-     * 148 kg before calculating cement.
-     */
     const freeWaterContent =
       Math.round(
         calculatedFreeWater
       );
 
     // ----------------------------------------------------------
-    // STEP 6 — CEMENTITIOUS MATERIAL CONTENT
+    // STEP 6 — CEMENTITIOUS CONTENT
     // ----------------------------------------------------------
 
     const calculatedCementitiousContent =
       freeWaterContent /
       adoptedWaterBinderRatio;
 
-    /*
-     * IS 456 durability minimum is checked against calculated
-     * cementitious content.
-     *
-     * We use the greater of calculated and minimum required.
-     */
     const cementitiousContent =
       Math.max(
         Math.ceil(
@@ -676,7 +647,7 @@ export default function MixDesignCalculator({
       cementitiousContent;
 
     // ----------------------------------------------------------
-    // STEP 7 — MINERAL ADMIXTURE SPLIT
+    // STEP 7 — MINERAL ADMIXTURE
     // ----------------------------------------------------------
 
     const mineralReplacement =
@@ -715,7 +686,7 @@ export default function MixDesignCalculator({
           );
 
     // ----------------------------------------------------------
-    // STEP 9 — CEMENT LIMIT CHECK
+    // STEP 9 — CEMENT LIMIT CHECKS
     // ----------------------------------------------------------
 
     const cementCheckPassed =
@@ -729,7 +700,7 @@ export default function MixDesignCalculator({
       !maximumCementCheckPassed
     ) {
       warnings.push(
-        `Calculated cement content is ${cementContent} kg/m³, which exceeds the commonly specified 450 kg/m³ maximum used for normal concrete. Reconsider the design using appropriate admixture/SCM strategy and trial data rather than simply capping cement.`
+        `Calculated cement content is ${cementContent} kg/m³, which exceeds 450 kg/m³. Review the material/admixture system and trial mix rather than simply capping the cement.`
       );
     }
 
@@ -761,7 +732,7 @@ export default function MixDesignCalculator({
     }
 
     // ----------------------------------------------------------
-    // STEP 11 — TABLE 5 COARSE AGGREGATE PROPORTION
+    // STEP 11 — TABLE 5
     // ----------------------------------------------------------
 
     const baseCoarseAggregateFraction =
@@ -769,12 +740,6 @@ export default function MixDesignCalculator({
         maxAggregateSize
       ][fineAggregateZone];
 
-    /*
-     * IS 10262 Table 5 is based on w/c or w/cm = 0.50.
-     *
-     * +0.01 CA volume for every 0.05 decrease in ratio.
-     * -0.01 CA volume for every 0.05 increase.
-     */
     const waterBinderDifference =
       0.50 -
       actualWaterBinderRatio;
@@ -788,10 +753,6 @@ export default function MixDesignCalculator({
       baseCoarseAggregateFraction +
       ratioAdjustment;
 
-    // ----------------------------------------------------------
-    // PUMPABLE / CONGESTED CONCRETE ADJUSTMENT
-    // ----------------------------------------------------------
-
     if (
       placingMethod ===
       "Pumping"
@@ -800,13 +761,10 @@ export default function MixDesignCalculator({
         0.90;
 
       warnings.push(
-        "Pumping selected: coarse aggregate proportion has been reduced by 10% as a preliminary Table 5 adjustment. Trial batches are required to confirm workability and performance."
+        "Pumping selected: a preliminary 10% reduction in coarse aggregate proportion has been applied. Confirm by trial mix."
       );
     }
 
-    /*
-     * Prevent impossible proportions.
-     */
     correctedCoarseAggregateFraction =
       Math.min(
         Math.max(
@@ -821,7 +779,7 @@ export default function MixDesignCalculator({
       correctedCoarseAggregateFraction;
 
     // ----------------------------------------------------------
-    // SHAPE / SOURCE WARNINGS
+    // MATERIAL-SOURCE WARNINGS
     // ----------------------------------------------------------
 
     if (
@@ -829,7 +787,7 @@ export default function MixDesignCalculator({
       "Crushed Angular"
     ) {
       warnings.push(
-        "Table 5 values are based on crushed angular aggregate. IS 10262 permits suitable adjustment for other aggregate shapes, but does not prescribe a universal numerical correction; final adjustment must be established by trials."
+        "The Table 5 base values are for crushed angular aggregate. Any source/shape adjustment should be validated with trials."
       );
     }
 
@@ -838,7 +796,7 @@ export default function MixDesignCalculator({
       "Natural Sand"
     ) {
       warnings.push(
-        "IS 10262 notes that crushed or mixed fine aggregate may need lower fine-aggregate content and corresponding increase in coarse aggregate. No arbitrary fixed correction has been applied; final adjustment should be established by trials."
+        "Fine aggregate source differs from the benchmark. Final aggregate adjustment should be established through trial mixes."
       );
     }
 
@@ -849,12 +807,12 @@ export default function MixDesignCalculator({
         "Reinforced Concrete"
     ) {
       warnings.push(
-        "IS 10262 recommends that Zone IV fine aggregate should not be used in reinforced concrete unless tests establish suitability."
+        "Zone IV fine aggregate requires special suitability review for reinforced concrete."
       );
     }
 
     // ----------------------------------------------------------
-    // STEP 12 — ABSOLUTE VOLUME CALCULATION
+    // STEP 12 — ABSOLUTE VOLUME METHOD
     // ----------------------------------------------------------
 
     const cementVolume =
@@ -916,14 +874,9 @@ export default function MixDesignCalculator({
       1000;
 
     // ----------------------------------------------------------
-    // STEP 13 — MOISTURE / ABSORPTION CORRECTION
+    // STEP 13 — MOISTURE / ABSORPTION
     // ----------------------------------------------------------
 
-    /*
-     * SSD → dry mass:
-     *
-     * Dry mass = SSD mass / (1 + absorption %)
-     */
     const coarseAggregateDry =
       coarseAggregateSSD /
       (1 +
@@ -936,14 +889,6 @@ export default function MixDesignCalculator({
         faAbsorption /
           100);
 
-    /*
-     * Surface/free water contribution:
-     *
-     * dry mass × (moisture - absorption) / 100
-     *
-     * Positive = aggregate contributes water.
-     * Negative = aggregate consumes water.
-     */
     const coarseAggregateWaterContribution =
       coarseAggregateDry *
       (
@@ -960,12 +905,6 @@ export default function MixDesignCalculator({
         100
       );
 
-    /*
-     * Water to add at batching:
-     *
-     * Required free water
-     * minus water contributed by aggregates.
-     */
     const waterToAdd =
       Math.max(
         0,
@@ -980,15 +919,6 @@ export default function MixDesignCalculator({
     // STEP 14 — MIX RATIO
     // ----------------------------------------------------------
 
-    /*
-     * For normal cement-only mixes, show:
-     *
-     * 1 : FA/Cement : CA/Cement
-     *
-     * If mineral admixture is present, show binder ratio:
-     *
-     * 1 : FA/Binder : CA/Binder
-     */
     const binderMass =
       cementitiousContent;
 
@@ -1000,10 +930,13 @@ export default function MixDesignCalculator({
       )}`;
 
     // ----------------------------------------------------------
-    // YIELD CHECK
+    // VOLUME CHECK
+    // ----------------------------------------------------------
+    // Renamed from "yield" because "yield" is a reserved
+    // identifier in strict-mode JavaScript/TypeScript.
     // ----------------------------------------------------------
 
-    const yield =
+    const volumeCheck =
       cementVolume +
       mineralAdmixtureVolume +
       waterVolume +
@@ -1013,7 +946,7 @@ export default function MixDesignCalculator({
       fineAggregateVolume;
 
     // ----------------------------------------------------------
-    // RETURN RESULT
+    // RESULT
     // ----------------------------------------------------------
 
     setMixResult({
@@ -1083,7 +1016,7 @@ export default function MixDesignCalculator({
 
       mixRatio,
 
-      yield,
+      volumeCheck,
 
       cementCheckPassed,
 
@@ -1135,9 +1068,7 @@ export default function MixDesignCalculator({
     <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
       <div className="max-w-6xl mx-auto w-full">
 
-        {/* ================================================== */}
-        {/* HEADER                                            */}
-        {/* ================================================== */}
+        {/* HEADER */}
 
         <div
           className={`border rounded-[32px] p-8 md:p-10 shadow-sm mt-8 md:mt-2 transition-colors ${
@@ -1169,9 +1100,7 @@ export default function MixDesignCalculator({
             </p>
           </div>
 
-          {/* ================================================== */}
-          {/* DESIGN STIPULATIONS                                */}
-          {/* ================================================== */}
+          {/* DESIGN STIPULATIONS */}
 
           <div className="mb-6">
             <h3 className={sectionTitleClass}>
@@ -1280,18 +1209,6 @@ export default function MixDesignCalculator({
                     Curve 3 — 53 MPa and above
                   </option>
                 </select>
-
-                <p
-                  className={`mt-1.5 text-[10px] ${
-                    isDarkMode
-                      ? "text-slate-600"
-                      : "text-slate-400"
-                  }`}
-                >
-                  Used as the Figure 1 reference;
-                  preliminary w/b ratio is still
-                  entered explicitly.
-                </p>
               </div>
 
               <div>
@@ -1436,18 +1353,6 @@ export default function MixDesignCalculator({
                   }
                   className={inputClass}
                 />
-
-                <p
-                  className={`mt-1.5 text-[10px] ${
-                    isDarkMode
-                      ? "text-slate-600"
-                      : "text-slate-400"
-                  }`}
-                >
-                  Recorded for design reporting;
-                  transport-related initial slump is
-                  established from project conditions.
-                </p>
               </div>
 
               <div>
@@ -1676,9 +1581,7 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* ================================================== */}
-          {/* MATERIAL PROPERTIES                                */}
-          {/* ================================================== */}
+          {/* MATERIAL PROPERTIES */}
 
           <div className="mb-6">
             <h3 className={sectionTitleClass}>
@@ -1906,18 +1809,6 @@ export default function MixDesignCalculator({
                   }
                   className={inputClass}
                 />
-
-                <p
-                  className={`mt-1.5 text-[10px] ${
-                    isDarkMode
-                      ? "text-slate-600"
-                      : "text-slate-400"
-                  }`}
-                >
-                  Material/trial value. The Annex A
-                  benchmark uses 23% with its selected
-                  superplasticizer.
-                </p>
               </div>
 
               <div>
@@ -1966,9 +1857,7 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* ================================================== */}
-          {/* STRENGTH / WATER-BINDER RATIO                      */}
-          {/* ================================================== */}
+          {/* STRENGTH */}
 
           <div className="mb-6">
             <h3 className={sectionTitleClass}>
@@ -2000,18 +1889,6 @@ export default function MixDesignCalculator({
                   }
                   className={inputClass}
                 />
-
-                <p
-                  className={`mt-1.5 text-[10px] ${
-                    isDarkMode
-                      ? "text-slate-600"
-                      : "text-slate-400"
-                  }`}
-                >
-                  Enter from Fig. 1 / actual material
-                  strength relationship. The calculator
-                  checks it against durability.
-                </p>
               </div>
 
               <div>
@@ -2063,20 +1940,6 @@ export default function MixDesignCalculator({
                       : "Actual"}
                   </button>
                 </div>
-
-                <p
-                  className={`mt-1.5 text-[10px] ${
-                    isDarkMode
-                      ? "text-slate-600"
-                      : "text-slate-400"
-                  }`}
-                >
-                  Assumed:{" "}
-                  {assumedStandardDeviation.toFixed(
-                    1
-                  )}{" "}
-                  N/mm² for current grade/control.
-                </p>
               </div>
 
               <div>
@@ -2096,23 +1959,11 @@ export default function MixDesignCalculator({
                   )}{" "}
                   N/mm²
                 </div>
-
-                <p
-                  className={`mt-1.5 text-[10px] ${
-                    isDarkMode
-                      ? "text-slate-600"
-                      : "text-slate-400"
-                  }`}
-                >
-                  max(fck + 1.65S, fck + X)
-                </p>
               </div>
             </div>
           </div>
 
-          {/* ================================================== */}
-          {/* DURABILITY                                          */}
-          {/* ================================================== */}
+          {/* DURABILITY */}
 
           <div className="mb-8">
             <h3 className={sectionTitleClass}>
@@ -2198,9 +2049,7 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* ================================================== */}
-          {/* CALCULATE BUTTON                                   */}
-          {/* ================================================== */}
+          {/* CALCULATE */}
 
           <button
             onClick={
@@ -2215,16 +2064,12 @@ export default function MixDesignCalculator({
             Calculate IS 10262 Mix
           </button>
 
-          {/* ================================================== */}
-          {/* RESULTS                                             */}
-          {/* ================================================== */}
+          {/* RESULTS */}
 
           {mixResult && (
             <div className="space-y-6">
 
-              {/* ------------------------------------------------ */}
-              {/* STATUS                                            */}
-              {/* ------------------------------------------------ */}
+              {/* CHECKS */}
 
               <div>
                 <h3
@@ -2304,12 +2149,10 @@ export default function MixDesignCalculator({
                 </div>
               </div>
 
-              {/* ------------------------------------------------ */}
-              {/* WARNINGS                                          */}
-              {/* ------------------------------------------------ */}
+              {/* WARNINGS */}
 
-              {mixResult.warnings.length >
-                0 && (
+              {mixResult.warnings
+                .length > 0 && (
                 <div
                   className={`rounded-[22px] border p-5 ${
                     isDarkMode
@@ -2354,9 +2197,7 @@ export default function MixDesignCalculator({
                 </div>
               )}
 
-              {/* ------------------------------------------------ */}
-              {/* MAIN RESULT                                       */}
-              {/* ------------------------------------------------ */}
+              {/* MAIN OUTPUT */}
 
               <div>
                 <h3
@@ -2365,9 +2206,8 @@ export default function MixDesignCalculator({
                   6. Calculated Mix — Per m³
                 </h3>
 
-                <div
-                  className={`grid grid-cols-1 lg:grid-cols-2 gap-6`}
-                >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
                   <div
                     className={`rounded-[24px] border p-7 ${
                       isDarkMode
@@ -2501,10 +2341,6 @@ export default function MixDesignCalculator({
 
                     </div>
                   </div>
-
-                  {/* ------------------------------------------------ */}
-                  {/* AGGREGATE / RATIO DETAIL                         */}
-                  {/* ------------------------------------------------ */}
 
                   <div
                     className={`rounded-[24px] border p-7 ${
@@ -2698,10 +2534,9 @@ export default function MixDesignCalculator({
                         <p
                           className={`mt-2 text-lg font-medium ${
                             Math.abs(
-                              mixResult.yield -
+                              mixResult.volumeCheck -
                                 1
-                            ) <
-                            0.005
+                            ) < 0.005
                               ? isDarkMode
                                 ? "text-emerald-400"
                                 : "text-emerald-600"
@@ -2711,10 +2546,11 @@ export default function MixDesignCalculator({
                           }`}
                         >
                           {
-                            mixResult.yield.toFixed(
+                            mixResult.volumeCheck.toFixed(
                               4
                             )
-                          } m³
+                          }{" "}
+                          m³
                         </p>
 
                         <p
@@ -2733,9 +2569,7 @@ export default function MixDesignCalculator({
                 </div>
               </div>
 
-              {/* ------------------------------------------------ */}
-              {/* TRIAL MIX NOTICE                                 */}
-              {/* ------------------------------------------------ */}
+              {/* TRIAL MIX NOTICE */}
 
               <div
                 className={`rounded-[22px] border p-5 ${
@@ -2762,12 +2596,12 @@ export default function MixDesignCalculator({
                   }`}
                 >
                   This calculation produces the
-                  preliminary calculated mix. IS 10262
-                  requires the calculated proportions to
-                  be checked by trial batches and adjusted
-                  based on workability, segregation,
-                  bleeding, strength and durability
-                  performance before finalizing the mix.
+                  preliminary calculated mix. The
+                  proportions should be checked by
+                  trial batches and adjusted based on
+                  workability, segregation, bleeding,
+                  strength and durability performance
+                  before finalizing the mix.
                 </p>
               </div>
             </div>

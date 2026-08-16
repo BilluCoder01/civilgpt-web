@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -849,182 +848,68 @@ export default function Chat() {
       setIsUploading(true);
       setUploadStatus(null);
 
+      const formData =
+        new FormData();
+
+      formData.append(
+        "file",
+        file
+      );
+
+      formData.append(
+        "uploadType",
+        currentUploadType
+      );
+
+      if (
+        currentUploadType === "standard"
+      ) {
+        formData.append(
+          "isNumber",
+          standardIsNumber.trim()
+        );
+
+        formData.append(
+          "editionYear",
+          standardEditionYear.trim()
+        );
+
+        formData.append(
+          "title",
+          standardTitle.trim()
+        );
+      }
+
       try {
-        // --------------------------------------------------------
-        // AUTH
-        // --------------------------------------------------------
-
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          throw new Error(
-            "You are not authenticated. Please sign in again."
-          );
-        }
-
-        // --------------------------------------------------------
-        // VALIDATE FILE
-        // --------------------------------------------------------
-
-        const isPdf =
-          file.type === "application/pdf" ||
-          file.name
-            .toLowerCase()
-            .endsWith(".pdf");
-
-        if (!isPdf) {
-          throw new Error(
-            "Only PDF files are supported."
-          );
-        }
-
-        // --------------------------------------------------------
-        // STANDARD METADATA VALIDATION
-        // --------------------------------------------------------
-
-        if (currentUploadType === "standard") {
-          const normalizedIsNumber =
-            standardIsNumber.trim();
-
-          const normalizedTitle =
-            standardTitle.trim();
-
-          const year = Number(
-            standardEditionYear
+        const res =
+          await fetch(
+            "/api/upload",
+            {
+              method: "POST",
+              body: formData,
+            }
           );
 
-          if (!normalizedIsNumber) {
-            throw new Error(
-              "Enter the IS Standard number first."
-            );
-          }
+        const data =
+          await res.json();
 
-          if (
-            !Number.isInteger(year) ||
-            year < 1900 ||
-            year > 2100
-          ) {
-            throw new Error(
-              "Enter a valid edition year."
-            );
-          }
-
-          if (!normalizedTitle) {
-            throw new Error(
-              "Enter the IS Standard title first."
-            );
-          }
-        }
-
-        // --------------------------------------------------------
-        // GENERATE A UNIQUE STORAGE PATH
-        // --------------------------------------------------------
-        // The actual PDF bytes go directly from the browser to
-        // Supabase Storage. This avoids Vercel's serverless
-        // request-body limit.
-        // --------------------------------------------------------
-
-        const safeFilename = file.name
-          .replace(/[^a-zA-Z0-9._-]/g, "_")
-          .replace(/_+/g, "_");
-
-        const storagePath =
-          `${user.id}/${crypto.randomUUID()}-${safeFilename}`;
-
-        // --------------------------------------------------------
-        // DIRECT SUPABASE STORAGE UPLOAD
-        // --------------------------------------------------------
-
-        const { error: storageError } =
-          await supabase.storage
-            .from("civilgpt-pdfs")
-            .upload(
-              storagePath,
-              file,
-              {
-                contentType:
-                  "application/pdf",
-                upsert: false,
-                cacheControl: "3600",
-              }
-            );
-
-        if (storageError) {
-          throw new Error(
-            storageError.message ||
-              "Failed to upload PDF to storage."
-          );
-        }
-
-        // --------------------------------------------------------
-        // TELL THE SERVER TO PROCESS THE STORED PDF
-        // --------------------------------------------------------
-        // Only a small JSON payload now crosses the Vercel
-        // function boundary.
-        // --------------------------------------------------------
-
-        const response =
-          await fetch("/api/upload", {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              storagePath,
-              filename: file.name,
-              uploadType:
-                currentUploadType,
-              ...(currentUploadType ===
-                "standard"
-                ? {
-                    isNumber:
-                      standardIsNumber.trim(),
-                    editionYear:
-                      standardEditionYear.trim(),
-                    title:
-                      standardTitle.trim(),
-                  }
-                : {}),
-            }),
-          });
-
-        const responseText =
-          await response.text();
-
-        let data: any = null;
-
-        try {
-          data = responseText
-            ? JSON.parse(responseText)
-            : null;
-        } catch {
-          throw new Error(
-            responseText ||
-              `Upload processing failed (${response.status}).`
-          );
-        }
-
-        if (!response.ok) {
+        if (!res.ok) {
           throw new Error(
             data?.error ||
-              `Upload processing failed (${response.status}).`
+              "Failed to upload PDF."
           );
         }
 
         setUploadedPdfName(
-          data?.filename ||
+          data.filename ||
             file.name
         );
 
-        if (data?.duplicate) {
+        if (data.duplicate) {
           setUploadStatus({
             type: "success",
             message:
-              currentUploadType ===
-              "standard"
+              currentUploadType === "standard"
                 ? "This IS Standard PDF is already in your standards library."
                 : "This PDF is already in your knowledge base.",
           });
@@ -1032,14 +917,13 @@ export default function Chat() {
           setUploadStatus({
             type: "success",
             message:
-              currentUploadType ===
-              "standard"
+              currentUploadType === "standard"
                 ? "IS Standard added to your standards library."
                 : "PDF Memorized.",
           });
         }
 
-        window.setTimeout(() => {
+        setTimeout(() => {
           setUploadStatus(null);
         }, 3500);
       } catch (error) {
@@ -1058,56 +942,15 @@ export default function Chat() {
       } finally {
         setIsUploading(false);
 
-        if (fileInputRef.current) {
+        if (
+          fileInputRef.current
+        ) {
           fileInputRef.current.value =
             "";
         }
       }
     };
-    
-    const testExistingStandard = async () => {
-  try {
-    const response = await fetch(
-      "/api/standards/prepare-existing",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          standardId:
-            "d239e0b7-bb9e-4b48-9de2-ae544c8fe6aa",
 
-          storagePath:
-            "c54f9e53-0a42-426e-a31b-a4e88f11f62f/f1b492ed-a010-4bb4-9622-1f32ca5f2c16-is.10262.2009.pdf",
-        }),
-      }
-    );
-
-    const data =
-      await response.json();
-
-    console.log(
-      "Standard preparation result:",
-      data
-    );
-
-    alert(
-      data?.message ||
-        data?.error ||
-        "Finished"
-    );
-  } catch (error) {
-    console.error(
-      "Standard preparation failed:",
-      error
-    );
-
-    alert(
-      "Failed to prepare standard."
-    );
-  }
-};
   // ------------------------------------------------------------
   // REMOVE PDF VISUAL CHIP
   // ------------------------------------------------------------
@@ -1390,6 +1233,76 @@ export default function Chat() {
         );
       } finally {
         setIsLoading(false);
+      }
+    };
+
+  // ------------------------------------------------------------
+  // TEMPORARY: PREPARE EXISTING IS 10262 PDF
+  // ------------------------------------------------------------
+
+  const prepareExistingStandard =
+    async () => {
+      if (isUploading || isLoading) {
+        return;
+      }
+
+      setIsUploading(true);
+      setUploadStatus(null);
+
+      try {
+        const response =
+          await fetch(
+            "/api/standards/prepare-existing",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify({
+                standardId:
+                  "d239e0b7-bb9e-4b48-9de2-ae544c8fe6aa",
+                storagePath:
+                  "c54f9e53-0a42-426e-a31b-a4e88f11f62f/f1b492ed-a010-4bb4-9622-1f32ca5f2c16-is.10262.2009.pdf",
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Failed to prepare IS 10262."
+          );
+        }
+
+        console.log(
+          "IS 10262 preparation result:",
+          data
+        );
+
+        setUploadStatus({
+          type: "success",
+          message:
+            `IS 10262 prepared: ${data.totalChunks ?? 0} chunks, ${data.pageCount ?? 0} pages.`,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to prepare existing standard:",
+          error
+        );
+
+        setUploadStatus({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to prepare IS 10262.",
+        });
+      } finally {
+        setIsUploading(false);
       }
     };
 
@@ -2052,6 +1965,25 @@ export default function Chat() {
                   className="h-4"
                 />
               </div>
+            </div>
+
+            {/* TEMPORARY IS 10262 RECOVERY TEST */}
+
+            <div className="max-w-3xl mx-auto w-full px-4 md:px-0 mb-4">
+              <button
+                type="button"
+                onClick={prepareExistingStandard}
+                disabled={isUploading || isLoading}
+                className={`px-4 py-2 rounded-xl text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isDarkMode
+                    ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+                    : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                }`}
+              >
+                {isUploading
+                  ? "Preparing IS 10262…"
+                  : "Prepare existing IS 10262"}
+              </button>
             </div>
 
             {/* UPLOAD DIALOG */}

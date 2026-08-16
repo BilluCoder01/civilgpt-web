@@ -10,16 +10,37 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+// ============================================================
+// ENVIRONMENT
+// ============================================================
+
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
+if (!supabaseUrl) {
+  throw new Error(
+    "NEXT_PUBLIC_SUPABASE_URL is not configured."
+  );
+}
+
+if (!supabaseServiceKey) {
+  throw new Error(
+    "SUPABASE_SERVICE_ROLE_KEY is not configured."
+  );
+}
+
+// Server-side admin client.
+// The service role is NEVER exposed to the browser.
 const supabaseAdmin = createClient(
   supabaseUrl,
   supabaseServiceKey
 );
+
+const STORAGE_BUCKET =
+  "civilgpt-pdfs";
 
 // ============================================================
 // TYPES
@@ -29,6 +50,16 @@ type UploadType =
   | "engineering"
   | "standard";
 
+type UploadRequest = {
+  storagePath?: string;
+  filename?: string;
+  uploadType?: UploadType;
+
+  isNumber?: string;
+  editionYear?: string;
+  title?: string;
+};
+
 // ============================================================
 // PDF EXTRACTION
 // ============================================================
@@ -36,6 +67,8 @@ type UploadType =
 async function extractPdf(
   buffer: Buffer
 ) {
+  // pdf-parse v2.x can require the worker explicitly in a
+  // Node.js server environment.
   const { CanvasFactory } = await import(
     "pdf-parse/worker"
   );
@@ -60,7 +93,7 @@ async function extractPdf(
 }
 
 // ============================================================
-// HASH
+// SHA-256
 // ============================================================
 
 function getDocumentHash(
@@ -72,16 +105,93 @@ function getDocumentHash(
 }
 
 // ============================================================
-// CLEAN TEXT
+// TEXT CLEANING
 // ============================================================
 
 function cleanText(
   text: string
 ): string {
   return text
-    .replace(/\u0000/g, "")
-    .replace(/\s+/g, " ")
+    .replace(
+      /\u0000/g,
+      ""
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
     .trim();
+}
+
+// ============================================================
+// STORAGE PATH VALIDATION
+// ============================================================
+
+function isUserStoragePath(
+  storagePath: string,
+  userId: string
+): boolean {
+  const expectedPrefix =
+    `${userId}/`;
+
+  return (
+    storagePath.startsWith(
+      expectedPrefix
+    ) &&
+    storagePath.length >
+      expectedPrefix.length
+  );
+}
+
+// ============================================================
+// DELETE STORAGE OBJECT
+// ============================================================
+
+async function deleteStorageFile(
+  storagePath: string
+) {
+  try {
+    const {
+      error,
+    } =
+      await supabaseAdmin.storage
+        .from(
+          STORAGE_BUCKET
+        )
+        .remove([
+          storagePath,
+        ]);
+
+    if (error) {
+      console.error(
+        "Failed to remove Storage file:",
+        error
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Storage cleanup failed:",
+      error
+    );
+  }
+}
+
+// ============================================================
+// JSON RESPONSE HELPER
+// ============================================================
+
+function errorResponse(
+  message: string,
+  status = 500
+) {
+  return NextResponse.json(
+    {
+      error: message,
+    },
+    {
+      status,
+    }
+  );
 }
 
 // ============================================================
@@ -91,9 +201,13 @@ function cleanText(
 export async function POST(
   req: Request
 ) {
+  let storagePathForCleanup:
+    | string
+    | null = null;
+
   try {
     // ========================================================
-    // AUTH
+    // AUTHENTICATION
     // ========================================================
 
     const cookieStore =
@@ -120,70 +234,77 @@ export async function POST(
       await supabaseAuth.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        {
-          error:
-            "Unauthorized",
-        },
-        {
-          status: 401,
-        }
+      return errorResponse(
+        "Unauthorized.",
+        401
       );
     }
 
     // ========================================================
-    // FORM DATA
+    // REQUEST BODY
+    // ========================================================
+    //
+    // IMPORTANT:
+    // The PDF itself is NO LONGER sent here.
+    //
+    // The browser uploads the PDF directly to Supabase
+    // Storage and this endpoint receives only a small JSON
+    // payload containing the Storage path and metadata.
+    //
     // ========================================================
 
-    const formData =
-      await req.formData();
+    let body: UploadRequest;
 
-    const file =
-      formData.get(
-        "file"
-      ) as File | null;
+    try {
+      body =
+        (await req.json()) as UploadRequest;
+    } catch {
+      return errorResponse(
+        "Invalid JSON request body.",
+        400
+      );
+    }
 
-    const uploadType =
-      (
-        formData.get(
-          "uploadType"
-        ) || "engineering"
-      ).toString() as UploadType;
+    const {
+      storagePath,
+      filename,
+      uploadType = "engineering",
+      isNumber = "",
+      editionYear:
+        editionYearRaw = "",
+      title = "",
+    } = body;
 
-    const isNumber =
-      formData
-        .get("isNumber")
-        ?.toString()
-        .trim() || "";
+    // ========================================================
+    // BASIC VALIDATION
+    // ========================================================
 
-    const editionYearRaw =
-      formData
-        .get("editionYear")
-        ?.toString()
-        .trim() || "";
+    if (!storagePath) {
+      return errorResponse(
+        "Storage path is required.",
+        400
+      );
+    }
 
-    const title =
-      formData
-        .get("title")
-        ?.toString()
-        .trim() || "";
+    if (
+      !isUserStoragePath(
+        storagePath,
+        user.id
+      )
+    ) {
+      return errorResponse(
+        "Invalid Storage path.",
+        403
+      );
+    }
 
-    const editionYear =
-      editionYearRaw
-        ? Number(
-            editionYearRaw
-          )
-        : null;
+    storagePathForCleanup =
+      storagePath;
 
-    if (!file) {
-      return NextResponse.json(
-        {
-          error:
-            "No file uploaded.",
-        },
-        {
-          status: 400,
-        }
+    if (!filename) {
+      return errorResponse(
+        "Filename is required.",
+        400
       );
     }
 
@@ -193,37 +314,29 @@ export async function POST(
       uploadType !==
         "standard"
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid upload type.",
-        },
-        {
-          status: 400,
-        }
+      return errorResponse(
+        "Invalid upload type.",
+        400
       );
     }
 
     // ========================================================
-    // PDF VALIDATION
+    // PDF FILENAME VALIDATION
     // ========================================================
 
     const isPdf =
-      file.type ===
-        "application/pdf" ||
-      file.name
+      filename
         .toLowerCase()
         .endsWith(".pdf");
 
     if (!isPdf) {
-      return NextResponse.json(
-        {
-          error:
-            "Only PDF files are supported.",
-        },
-        {
-          status: 400,
-        }
+      await deleteStorageFile(
+        storagePath
+      );
+
+      return errorResponse(
+        "Only PDF files are supported.",
+        400
       );
     }
 
@@ -231,21 +344,33 @@ export async function POST(
     // STANDARD METADATA VALIDATION
     // ========================================================
 
+    const normalizedIsNumber =
+      isNumber.trim();
+
+    const normalizedTitle =
+      title.trim();
+
+    const editionYear =
+      editionYearRaw.trim()
+        ? Number(
+            editionYearRaw.trim()
+          )
+        : null;
+
     if (
       uploadType ===
       "standard"
     ) {
       if (
-        !isNumber
+        !normalizedIsNumber
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "IS Standard number is required.",
-          },
-          {
-            status: 400,
-          }
+        await deleteStorageFile(
+          storagePath
+        );
+
+        return errorResponse(
+          "IS Standard number is required.",
+          400
         );
       }
 
@@ -255,54 +380,97 @@ export async function POST(
           editionYear
         ) ||
         editionYear < 1900 ||
-        editionYear >
-          2100
+        editionYear > 2100
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "A valid standard edition year is required.",
-          },
-          {
-            status: 400,
-          }
+        await deleteStorageFile(
+          storagePath
+        );
+
+        return errorResponse(
+          "A valid standard edition year is required.",
+          400
         );
       }
 
-      if (!title) {
-        return NextResponse.json(
-          {
-            error:
-              "IS Standard title is required.",
-          },
-          {
-            status: 400,
-          }
+      if (
+        !normalizedTitle
+      ) {
+        await deleteStorageFile(
+          storagePath
+        );
+
+        return errorResponse(
+          "IS Standard title is required.",
+          400
         );
       }
     }
 
     // ========================================================
-    // READ FILE
+    // DOWNLOAD PDF FROM PRIVATE STORAGE
+    // ========================================================
+
+    const {
+      data: storageFile,
+      error:
+        storageDownloadError,
+    } =
+      await supabaseAdmin.storage
+        .from(
+          STORAGE_BUCKET
+        )
+        .download(
+          storagePath
+        );
+
+    if (
+      storageDownloadError
+    ) {
+      console.error(
+        "Storage download error:",
+        storageDownloadError
+      );
+
+      await deleteStorageFile(
+        storagePath
+      );
+
+      return errorResponse(
+        `Failed to access uploaded PDF: ${storageDownloadError.message}`,
+        500
+      );
+    }
+
+    if (!storageFile) {
+      await deleteStorageFile(
+        storagePath
+      );
+
+      return errorResponse(
+        "Uploaded PDF could not be found in Storage.",
+        404
+      );
+    }
+
+    // ========================================================
+    // BUFFER
     // ========================================================
 
     const buffer =
       Buffer.from(
-        await file.arrayBuffer()
+        await storageFile.arrayBuffer()
       );
 
     if (
-      buffer.length ===
-      0
+      buffer.length === 0
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Uploaded PDF is empty.",
-        },
-        {
-          status: 400,
-        }
+      await deleteStorageFile(
+        storagePath
+      );
+
+      return errorResponse(
+        "Uploaded PDF is empty.",
+        400
       );
     }
 
@@ -334,7 +502,7 @@ export async function POST(
             "engineering_documents"
           )
           .select(
-            "id, metadata"
+            "id, metadata, storage_path"
           )
           .eq(
             "user_id",
@@ -356,11 +524,17 @@ export async function POST(
       if (
         existingDocument
       ) {
-        const filename =
+        const existingFilename =
           existingDocument
             .metadata
             ?.filename ||
-          file.name;
+          filename;
+
+        // The browser already uploaded this new copy
+        // to Storage. Remove that duplicate copy.
+        await deleteStorageFile(
+          storagePath
+        );
 
         return NextResponse.json(
           {
@@ -369,7 +543,8 @@ export async function POST(
               true,
             uploadType:
               "engineering",
-            filename,
+            filename:
+              existingFilename,
             documentHash,
             message:
               "This PDF is already in your engineering knowledge base.",
@@ -400,7 +575,7 @@ export async function POST(
             "standard_documents"
           )
           .select(
-            "id, filename, standard_id"
+            "id, filename, standard_id, storage_path"
           )
           .eq(
             "user_id",
@@ -422,6 +597,11 @@ export async function POST(
       if (
         existingStandard
       ) {
+        // Remove the newly uploaded duplicate.
+        await deleteStorageFile(
+          storagePath
+        );
+
         return NextResponse.json(
           {
             success: true,
@@ -443,7 +623,7 @@ export async function POST(
     }
 
     // ========================================================
-    // EXTRACT PDF
+    // EXTRACT PDF TEXT
     // ========================================================
 
     const parsedPdf =
@@ -452,7 +632,8 @@ export async function POST(
       );
 
     const rawText =
-      parsedPdf.text || "";
+      parsedPdf.text ||
+      "";
 
     const cleanFullText =
       cleanText(
@@ -463,14 +644,13 @@ export async function POST(
       cleanFullText.length ===
       0
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "No readable text was found in the PDF.",
-        },
-        {
-          status: 400,
-        }
+      await deleteStorageFile(
+        storagePath
+      );
+
+      return errorResponse(
+        "No readable text was found in the PDF.",
+        400
       );
     }
 
@@ -482,6 +662,10 @@ export async function POST(
       uploadType ===
       "engineering"
     ) {
+      // ------------------------------------------------------
+      // CHUNK
+      // ------------------------------------------------------
+
       const chunks: string[] =
         [];
 
@@ -507,6 +691,23 @@ export async function POST(
         }
       }
 
+      if (
+        chunks.length === 0
+      ) {
+        await deleteStorageFile(
+          storagePath
+        );
+
+        return errorResponse(
+          "No readable text chunks were produced from the PDF.",
+          400
+        );
+      }
+
+      // ------------------------------------------------------
+      // EMBEDDINGS
+      // ------------------------------------------------------
+
       const {
         embeddings,
       } =
@@ -528,6 +729,10 @@ export async function POST(
         );
       }
 
+      // ------------------------------------------------------
+      // DATABASE ROWS
+      // ------------------------------------------------------
+
       const rowsToInsert =
         chunks.map(
           (
@@ -546,11 +751,12 @@ export async function POST(
               ),
 
             metadata: {
-              filename:
-                file.name,
-
+              filename,
               chunk_index:
                 index,
+
+              upload_type:
+                "engineering",
             },
 
             user_id:
@@ -558,8 +764,15 @@ export async function POST(
 
             document_hash:
               documentHash,
+
+            storage_path:
+              storagePath,
           })
         );
+
+      // ------------------------------------------------------
+      // INSERT
+      // ------------------------------------------------------
 
       const {
         error:
@@ -576,10 +789,15 @@ export async function POST(
       if (
         insertError
       ) {
+        // Race condition protection.
         if (
           insertError.code ===
           "23505"
         ) {
+          await deleteStorageFile(
+            storagePath
+          );
+
           return NextResponse.json(
             {
               success: true,
@@ -587,8 +805,7 @@ export async function POST(
                 true,
               uploadType:
                 "engineering",
-              filename:
-                file.name,
+              filename,
               documentHash,
               message:
                 "This PDF was already uploaded.",
@@ -602,6 +819,15 @@ export async function POST(
         throw insertError;
       }
 
+      // ------------------------------------------------------
+      // SUCCESS
+      // ------------------------------------------------------
+
+      // We intentionally KEEP the Storage object.
+      // It is the source document associated with these rows.
+      storagePathForCleanup =
+        null;
+
       return NextResponse.json(
         {
           success: true,
@@ -609,9 +835,9 @@ export async function POST(
             false,
           uploadType:
             "engineering",
-          filename:
-            file.name,
+          filename,
           documentHash,
+          storagePath,
           chunks:
             chunks.length,
           message:
@@ -628,7 +854,7 @@ export async function POST(
     // ========================================================
 
     // --------------------------------------------------------
-    // 1. FIND OR CREATE STANDARD
+    // FIND OR CREATE STANDARD
     // --------------------------------------------------------
 
     let standardId:
@@ -655,7 +881,7 @@ export async function POST(
         )
         .eq(
           "is_number",
-          isNumber
+          normalizedIsNumber
         )
         .eq(
           "edition_year",
@@ -675,23 +901,17 @@ export async function POST(
       standardId =
         existingStandard.id;
 
-      // ------------------------------------------------------
-      // Do not silently reactivate a superseded/withdrawn
-      // standard just because a user uploads another copy.
-      // ------------------------------------------------------
-
       if (
         existingStandard.status !==
         "active"
       ) {
-        return NextResponse.json(
-          {
-            error:
-              `This standard already exists with status "${existingStandard.status}". Review the existing standard before uploading another edition.`,
-          },
-          {
-            status: 409,
-          }
+        await deleteStorageFile(
+          storagePath
+        );
+
+        return errorResponse(
+          `This standard already exists with status "${existingStandard.status}". Review the existing standard before uploading another edition.`,
+          409
         );
       }
     } else {
@@ -708,9 +928,10 @@ export async function POST(
           .insert([
             {
               is_number:
-                isNumber,
+                normalizedIsNumber,
 
-              title,
+              title:
+                normalizedTitle,
 
               edition_year:
                 editionYear,
@@ -743,8 +964,14 @@ export async function POST(
         newStandard.id;
     }
 
+    if (!standardId) {
+      throw new Error(
+        "Failed to determine the standard ID."
+      );
+    }
+
     // --------------------------------------------------------
-    // 2. CREATE DOCUMENT RECORD
+    // CREATE STANDARD DOCUMENT RECORD
     // --------------------------------------------------------
 
     const {
@@ -762,11 +989,13 @@ export async function POST(
             standard_id:
               standardId,
 
-            filename:
-              file.name,
+            filename,
 
             document_hash:
               documentHash,
+
+            storage_path:
+              storagePath,
 
             page_count:
               null,
@@ -790,6 +1019,10 @@ export async function POST(
         documentCreateError.code ===
         "23505"
       ) {
+        await deleteStorageFile(
+          storagePath
+        );
+
         return NextResponse.json(
           {
             success: true,
@@ -797,8 +1030,7 @@ export async function POST(
               true,
             uploadType:
               "standard",
-            filename:
-              file.name,
+            filename,
             documentHash,
             message:
               "This IS Standard PDF is already in your standards library.",
@@ -813,36 +1045,45 @@ export async function POST(
     }
 
     // --------------------------------------------------------
-    // 3. CHUNK STANDARD TEXT
+    // TRANSITIONAL STANDARD CHUNKING
     // --------------------------------------------------------
     //
-    // This is intentionally a transitional chunker.
-    // It preserves page/metadata architecture first.
+    // IMPORTANT:
+    // This is intentionally still the transitional chunker.
     //
-    // Clause/table/figure parsing will be improved in the
-    // next ingestion stage after this upload route is verified.
+    // We do NOT fabricate clause/table/page metadata.
+    // Those fields remain null until we implement the
+    // clause-aware/page-aware ingestion stage.
+    //
     // --------------------------------------------------------
 
     const standardChunks: Array<{
       content: string;
+
       chunk_index: number;
+
       page_number: number | null;
+
       clause_no: string | null;
+
       sub_clause_no: string | null;
+
       table_no: string | null;
+
       figure_no: string | null;
+
       annex_no: string | null;
+
       section_title: string | null;
     }> = [];
 
-    const basicChunks =
-      [];
-
     for (
-      let i = 0;
+      let i = 0,
+        chunkIndex = 0;
       i <
       cleanFullText.length;
-      i += 1000
+      i += 1000,
+      chunkIndex++
     ) {
       const chunk =
         cleanFullText.substring(
@@ -852,30 +1093,17 @@ export async function POST(
 
       if (
         chunk.trim()
-          .length > 0
+          .length === 0
       ) {
-        basicChunks.push(
-          chunk.trim()
-        );
+        continue;
       }
-    }
-
-    for (
-      let index = 0;
-      index <
-      basicChunks.length;
-      index++
-    ) {
-      const content =
-        basicChunks[
-          index
-        ];
 
       standardChunks.push({
-        content,
+        content:
+          chunk.trim(),
 
         chunk_index:
-          index,
+          chunkIndex,
 
         page_number:
           null,
@@ -900,8 +1128,36 @@ export async function POST(
       });
     }
 
+    if (
+      standardChunks.length ===
+      0
+    ) {
+      await supabaseAdmin
+        .from(
+          "standard_documents"
+        )
+        .delete()
+        .eq(
+          "id",
+          standardDocument.id
+        )
+        .eq(
+          "user_id",
+          user.id
+        );
+
+      await deleteStorageFile(
+        storagePath
+      );
+
+      return errorResponse(
+        "No readable standard chunks were produced from the PDF.",
+        400
+      );
+    }
+
     // --------------------------------------------------------
-    // 4. EMBEDDINGS
+    // EMBEDDINGS
     // --------------------------------------------------------
 
     const {
@@ -929,7 +1185,7 @@ export async function POST(
     }
 
     // --------------------------------------------------------
-    // 5. INSERT STANDARD CHUNKS
+    // STANDARD CHUNK ROWS
     // --------------------------------------------------------
 
     const rows =
@@ -984,6 +1240,10 @@ export async function POST(
         })
       );
 
+    // --------------------------------------------------------
+    // INSERT STANDARD CHUNKS
+    // --------------------------------------------------------
+
     const {
       error:
         chunkInsertError,
@@ -999,8 +1259,7 @@ export async function POST(
     if (
       chunkInsertError
     ) {
-      // Clean up the document row if chunk ingestion
-      // failed after the document record was created.
+      // Remove the document record.
       await supabaseAdmin
         .from(
           "standard_documents"
@@ -1015,12 +1274,20 @@ export async function POST(
           user.id
         );
 
+      // Remove the Storage object.
+      await deleteStorageFile(
+        storagePath
+      );
+
       throw chunkInsertError;
     }
 
-    // ========================================================
+    // --------------------------------------------------------
     // SUCCESS
-    // ========================================================
+    // --------------------------------------------------------
+
+    storagePathForCleanup =
+      null;
 
     return NextResponse.json(
       {
@@ -1029,18 +1296,24 @@ export async function POST(
           false,
         uploadType:
           "standard",
-        filename:
-          file.name,
+        filename,
         documentHash,
+        storagePath,
         standard: {
           id:
             standardId,
-          isNumber,
-          title,
+
+          isNumber:
+            normalizedIsNumber,
+
+          title:
+            normalizedTitle,
+
           editionYear,
         },
         chunks:
           standardChunks.length,
+
         message:
           "IS Standard added to your standards library.",
       },
@@ -1058,15 +1331,20 @@ export async function POST(
       "\n"
     );
 
-    return NextResponse.json(
-      {
-        error:
-          error?.message ||
-          "Failed to process PDF.",
-      },
-      {
-        status: 500,
-      }
+    // Only remove the uploaded object when this request
+    // did not successfully persist it.
+    if (
+      storagePathForCleanup
+    ) {
+      await deleteStorageFile(
+        storagePathForCleanup
+      );
+    }
+
+    return errorResponse(
+      error?.message ||
+        "Failed to process PDF.",
+      500
     );
   }
 }

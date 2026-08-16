@@ -849,68 +849,182 @@ export default function Chat() {
       setIsUploading(true);
       setUploadStatus(null);
 
-      const formData =
-        new FormData();
-
-      formData.append(
-        "file",
-        file
-      );
-
-      formData.append(
-        "uploadType",
-        currentUploadType
-      );
-
-      if (
-        currentUploadType === "standard"
-      ) {
-        formData.append(
-          "isNumber",
-          standardIsNumber.trim()
-        );
-
-        formData.append(
-          "editionYear",
-          standardEditionYear.trim()
-        );
-
-        formData.append(
-          "title",
-          standardTitle.trim()
-        );
-      }
-
       try {
-        const res =
-          await fetch(
-            "/api/upload",
-            {
-              method: "POST",
-              body: formData,
-            }
+        // --------------------------------------------------------
+        // AUTH
+        // --------------------------------------------------------
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          throw new Error(
+            "You are not authenticated. Please sign in again."
+          );
+        }
+
+        // --------------------------------------------------------
+        // VALIDATE FILE
+        // --------------------------------------------------------
+
+        const isPdf =
+          file.type === "application/pdf" ||
+          file.name
+            .toLowerCase()
+            .endsWith(".pdf");
+
+        if (!isPdf) {
+          throw new Error(
+            "Only PDF files are supported."
+          );
+        }
+
+        // --------------------------------------------------------
+        // STANDARD METADATA VALIDATION
+        // --------------------------------------------------------
+
+        if (currentUploadType === "standard") {
+          const normalizedIsNumber =
+            standardIsNumber.trim();
+
+          const normalizedTitle =
+            standardTitle.trim();
+
+          const year = Number(
+            standardEditionYear
           );
 
-        const data =
-          await res.json();
+          if (!normalizedIsNumber) {
+            throw new Error(
+              "Enter the IS Standard number first."
+            );
+          }
 
-        if (!res.ok) {
+          if (
+            !Number.isInteger(year) ||
+            year < 1900 ||
+            year > 2100
+          ) {
+            throw new Error(
+              "Enter a valid edition year."
+            );
+          }
+
+          if (!normalizedTitle) {
+            throw new Error(
+              "Enter the IS Standard title first."
+            );
+          }
+        }
+
+        // --------------------------------------------------------
+        // GENERATE A UNIQUE STORAGE PATH
+        // --------------------------------------------------------
+        // The actual PDF bytes go directly from the browser to
+        // Supabase Storage. This avoids Vercel's serverless
+        // request-body limit.
+        // --------------------------------------------------------
+
+        const safeFilename = file.name
+          .replace(/[^a-zA-Z0-9._-]/g, "_")
+          .replace(/_+/g, "_");
+
+        const storagePath =
+          `${user.id}/${crypto.randomUUID()}-${safeFilename}`;
+
+        // --------------------------------------------------------
+        // DIRECT SUPABASE STORAGE UPLOAD
+        // --------------------------------------------------------
+
+        const { error: storageError } =
+          await supabase.storage
+            .from("civilgpt-pdfs")
+            .upload(
+              storagePath,
+              file,
+              {
+                contentType:
+                  "application/pdf",
+                upsert: false,
+                cacheControl: "3600",
+              }
+            );
+
+        if (storageError) {
+          throw new Error(
+            storageError.message ||
+              "Failed to upload PDF to storage."
+          );
+        }
+
+        // --------------------------------------------------------
+        // TELL THE SERVER TO PROCESS THE STORED PDF
+        // --------------------------------------------------------
+        // Only a small JSON payload now crosses the Vercel
+        // function boundary.
+        // --------------------------------------------------------
+
+        const response =
+          await fetch("/api/upload", {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              storagePath,
+              filename: file.name,
+              uploadType:
+                currentUploadType,
+              ...(currentUploadType ===
+                "standard"
+                ? {
+                    isNumber:
+                      standardIsNumber.trim(),
+                    editionYear:
+                      standardEditionYear.trim(),
+                    title:
+                      standardTitle.trim(),
+                  }
+                : {}),
+            }),
+          });
+
+        const responseText =
+          await response.text();
+
+        let data: any = null;
+
+        try {
+          data = responseText
+            ? JSON.parse(responseText)
+            : null;
+        } catch {
+          throw new Error(
+            responseText ||
+              `Upload processing failed (${response.status}).`
+          );
+        }
+
+        if (!response.ok) {
           throw new Error(
             data?.error ||
-              "Failed to upload PDF."
+              `Upload processing failed (${response.status}).`
           );
         }
 
         setUploadedPdfName(
-          data.filename ||
+          data?.filename ||
             file.name
         );
 
-        if (data.duplicate) {
+        if (data?.duplicate) {
           setUploadStatus({
             type: "success",
             message:
-              currentUploadType === "standard"
+              currentUploadType ===
+              "standard"
                 ? "This IS Standard PDF is already in your standards library."
                 : "This PDF is already in your knowledge base.",
           });
@@ -918,13 +1032,14 @@ export default function Chat() {
           setUploadStatus({
             type: "success",
             message:
-              currentUploadType === "standard"
+              currentUploadType ===
+              "standard"
                 ? "IS Standard added to your standards library."
                 : "PDF Memorized.",
           });
         }
 
-        setTimeout(() => {
+        window.setTimeout(() => {
           setUploadStatus(null);
         }, 3500);
       } catch (error) {
@@ -943,9 +1058,7 @@ export default function Chat() {
       } finally {
         setIsUploading(false);
 
-        if (
-          fileInputRef.current
-        ) {
+        if (fileInputRef.current) {
           fileInputRef.current.value =
             "";
         }

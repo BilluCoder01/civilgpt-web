@@ -27,7 +27,9 @@ type MixResult = {
   cementitiousContent: number;
   cementContent: number;
   mineralAdmixtureContent: number;
+
   chemicalAdmixtureContent: number;
+  chemicalAdmixtureVolume: number;
 
   entrappedAir: number;
 
@@ -420,7 +422,7 @@ export default function MixDesignCalculator({
     useState<number>(0);
 
   // ============================================================
-  // WATER-CEMENT / CEMENTITIOUS RATIO
+  // WATER-BINDER RATIO
   // ============================================================
 
   const [
@@ -504,7 +506,7 @@ export default function MixDesignCalculator({
     const warnings: string[] = [];
 
     // ----------------------------------------------------------
-    // BASIC VALIDATION
+    // VALIDATION
     // ----------------------------------------------------------
 
     if (
@@ -606,7 +608,7 @@ export default function MixDesignCalculator({
           slumpSteps);
 
     // ----------------------------------------------------------
-    // STEP 5 — ADMIXTURE WATER REDUCTION
+    // STEP 5 — CHEMICAL ADMIXTURE WATER REDUCTION
     // ----------------------------------------------------------
 
     const effectiveWaterReduction =
@@ -685,6 +687,14 @@ export default function MixDesignCalculator({
             ).toFixed(2)
           );
 
+    const chemicalAdmixtureVolume =
+      chemicalAdmixture ===
+      "None"
+        ? 0
+        : chemicalAdmixtureContent /
+          (chemicalAdmixtureSG *
+            1000);
+
     // ----------------------------------------------------------
     // STEP 9 — CEMENT LIMIT CHECKS
     // ----------------------------------------------------------
@@ -701,15 +711,6 @@ export default function MixDesignCalculator({
     ) {
       warnings.push(
         `Calculated cement content is ${cementContent} kg/m³, which exceeds 450 kg/m³. Review the material/admixture system and trial mix rather than simply capping the cement.`
-      );
-    }
-
-    if (
-      cementitiousContent <
-      durabilityLimits.minCementitiousContent
-    ) {
-      warnings.push(
-        "The calculated cementitious content is below the durability minimum."
       );
     }
 
@@ -779,7 +780,7 @@ export default function MixDesignCalculator({
       correctedCoarseAggregateFraction;
 
     // ----------------------------------------------------------
-    // MATERIAL-SOURCE WARNINGS
+    // MATERIAL WARNINGS
     // ----------------------------------------------------------
 
     if (
@@ -812,7 +813,7 @@ export default function MixDesignCalculator({
     }
 
     // ----------------------------------------------------------
-    // STEP 12 — ABSOLUTE VOLUME METHOD
+    // STEP 12 — ABSOLUTE VOLUME
     // ----------------------------------------------------------
 
     const cementVolume =
@@ -827,11 +828,6 @@ export default function MixDesignCalculator({
     const waterVolume =
       freeWaterContent /
       1000;
-
-    const chemicalAdmixtureVolume =
-      chemicalAdmixtureContent /
-      (chemicalAdmixtureSG *
-        1000);
 
     const airVolume =
       entrappedAir /
@@ -930,10 +926,7 @@ export default function MixDesignCalculator({
       )}`;
 
     // ----------------------------------------------------------
-    // VOLUME CHECK
-    // ----------------------------------------------------------
-    // Renamed from "yield" because "yield" is a reserved
-    // identifier in strict-mode JavaScript/TypeScript.
+    // STEP 15 — VOLUME CHECK
     // ----------------------------------------------------------
 
     const volumeCheck =
@@ -946,7 +939,7 @@ export default function MixDesignCalculator({
       fineAggregateVolume;
 
     // ----------------------------------------------------------
-    // RESULT
+    // FINAL RESULT
     // ----------------------------------------------------------
 
     setMixResult({
@@ -989,6 +982,8 @@ export default function MixDesignCalculator({
       mineralAdmixtureContent,
 
       chemicalAdmixtureContent,
+
+      chemicalAdmixtureVolume,
 
       entrappedAir,
 
@@ -1068,7 +1063,9 @@ export default function MixDesignCalculator({
     <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-12 h-full">
       <div className="max-w-6xl mx-auto w-full">
 
-        {/* HEADER */}
+        {/* ================================================== */}
+        {/* HEADER                                             */}
+        {/* ================================================== */}
 
         <div
           className={`border rounded-[32px] p-8 md:p-10 shadow-sm mt-8 md:mt-2 transition-colors ${
@@ -1100,7 +1097,9 @@ export default function MixDesignCalculator({
             </p>
           </div>
 
-          {/* DESIGN STIPULATIONS */}
+          {/* ================================================== */}
+          {/* DESIGN STIPULATIONS                                */}
+          {/* ================================================== */}
 
           <div className="mb-6">
             <h3 className={sectionTitleClass}>
@@ -1141,8 +1140,12 @@ export default function MixDesignCalculator({
                   ].map(
                     (grade) => (
                       <option
-                        key={grade}
-                        value={grade}
+                        key={
+                          grade
+                        }
+                        value={
+                          grade
+                        }
                       >
                         M{grade}
                       </option>
@@ -1321,7 +1324,9 @@ export default function MixDesignCalculator({
                 <input
                   type="number"
                   min="0"
-                  value={slump}
+                  value={
+                    slump
+                  }
                   onChange={(e) =>
                     setSlump(
                       Number(
@@ -1488,7 +1493,8 @@ export default function MixDesignCalculator({
                   }
                   onChange={(e) =>
                     setFineAggregateZone(
-                      e.target.value as
+                      e.target
+                        .value as
                         | "Zone I"
                         | "Zone II"
                         | "Zone III"
@@ -1581,7 +1587,9 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* MATERIAL PROPERTIES */}
+          {/* ================================================== */}
+          {/* MATERIAL PROPERTIES                                */}
+          {/* ================================================== */}
 
           <div className="mb-6">
             <h3 className={sectionTitleClass}>
@@ -1857,7 +1865,9 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* STRENGTH */}
+          {/* ================================================== */}
+          {/* STRENGTH                                            */}
+          {/* ================================================== */}
 
           <div className="mb-6">
             <h3 className={sectionTitleClass}>
@@ -1963,7 +1973,9 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* DURABILITY */}
+          {/* ================================================== */}
+          {/* DURABILITY                                          */}
+          {/* ================================================== */}
 
           <div className="mb-8">
             <h3 className={sectionTitleClass}>
@@ -2049,7 +2061,9 @@ export default function MixDesignCalculator({
             </div>
           </div>
 
-          {/* CALCULATE */}
+          {/* ================================================== */}
+          {/* CALCULATE                                           */}
+          {/* ================================================== */}
 
           <button
             onClick={
@@ -2064,16 +2078,20 @@ export default function MixDesignCalculator({
             Calculate IS 10262 Mix
           </button>
 
-          {/* RESULTS */}
+          {/* ================================================== */}
+          {/* RESULTS                                             */}
+          {/* ================================================== */}
 
           {mixResult && (
             <div className="space-y-6">
 
-              {/* CHECKS */}
+              {/* DESIGN CHECKS */}
 
               <div>
                 <h3
-                  className={sectionTitleClass}
+                  className={
+                    sectionTitleClass
+                  }
                 >
                   5. Design Checks
                 </h3>
@@ -2197,16 +2215,22 @@ export default function MixDesignCalculator({
                 </div>
               )}
 
-              {/* MAIN OUTPUT */}
+              {/* ================================================== */}
+              {/* MAIN MIX OUTPUT                                    */}
+              {/* ================================================== */}
 
               <div>
                 <h3
-                  className={sectionTitleClass}
+                  className={
+                    sectionTitleClass
+                  }
                 >
                   6. Calculated Mix — Per m³
                 </h3>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* BASIC QUANTITIES */}
 
                   <div
                     className={`rounded-[24px] border p-7 ${
@@ -2258,8 +2282,8 @@ export default function MixDesignCalculator({
                       />
 
                       <ResultRow
-                        label="Cement"
-                        value={`${mixResult.cementContent.toFixed(
+                        label="Cementitious Material"
+                        value={`${mixResult.cementitiousContent.toFixed(
                           0
                         )} kg`}
                         highlight
@@ -2269,8 +2293,8 @@ export default function MixDesignCalculator({
                       />
 
                       <ResultRow
-                        label="Mineral Admixture"
-                        value={`${mixResult.mineralAdmixtureContent.toFixed(
+                        label="Cement"
+                        value={`${mixResult.cementContent.toFixed(
                           0
                         )} kg`}
                         isDarkMode={
@@ -2279,9 +2303,9 @@ export default function MixDesignCalculator({
                       />
 
                       <ResultRow
-                        label="Chemical Admixture"
-                        value={`${mixResult.chemicalAdmixtureContent.toFixed(
-                          2
+                        label="Mineral Admixture"
+                        value={`${mixResult.mineralAdmixtureContent.toFixed(
+                          0
                         )} kg`}
                         isDarkMode={
                           isDarkMode
@@ -2338,92 +2362,84 @@ export default function MixDesignCalculator({
                           isDarkMode
                         }
                       />
-
                     </div>
                   </div>
 
-                  <div
-                    className={`rounded-[24px] border p-7 ${
-                      isDarkMode
-                        ? "bg-[#131314] border-slate-800"
-                        : "bg-[#f8fafc] border-slate-200"
-                    }`}
-                  >
-                    <div className="space-y-5">
+                  {/* ================================================== */}
+                  {/* ADMIXTURE + AGGREGATE DETAILS                     */}
+                  {/* ================================================== */}
 
-                      <div>
-                        <p
-                          className={`text-[11px] uppercase tracking-wider font-medium ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          Aggregate Proportion
-                        </p>
+                  <div className="space-y-6">
 
-                        <p
-                          className={`mt-2 text-3xl font-medium ${
-                            isDarkMode
-                              ? "text-white"
-                              : "text-slate-800"
-                          }`}
-                        >
-                          {
-                            mixResult.correctedCoarseAggregateFraction.toFixed(
-                              3
-                            )
-                          }{" "}
-                          CA
-                        </p>
+                    {/* CHEMICAL ADMIXTURE CARD */}
 
-                        <p
-                          className={`mt-1 text-[13px] ${
-                            isDarkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          CA / total aggregate volume
-                        </p>
+                    <div
+                      className={`rounded-[24px] border p-7 ${
+                        isDarkMode
+                          ? "bg-[#131314] border-slate-800"
+                          : "bg-[#f8fafc] border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p
+                            className={`text-[11px] uppercase tracking-wider font-semibold ${
+                              isDarkMode
+                                ? "text-slate-500"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            Chemical Admixture
+                          </p>
+
+                          <h4
+                            className={`mt-1 text-xl font-medium ${
+                              isDarkMode
+                                ? "text-white"
+                                : "text-slate-800"
+                            }`}
+                          >
+                            {chemicalAdmixture ===
+                            "None"
+                              ? "None"
+                              : chemicalAdmixture}
+                          </h4>
+                        </div>
 
                         <div
-                          className={`mt-3 text-[13px] ${
+                          className={`w-10 h-10 rounded-[14px] flex items-center justify-center ${
                             isDarkMode
-                              ? "text-slate-400"
-                              : "text-slate-600"
+                              ? "bg-amber-500/15 text-amber-400"
+                              : "bg-amber-50 text-amber-600"
                           }`}
                         >
-                          FA proportion ={" "}
-                          <span className="font-medium">
-                            {
-                              mixResult.fineAggregateFraction.toFixed(
-                                3
-                              )
-                            }
-                          </span>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.8}
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M9 3h6M10 3v5.2L5.8 15.3A3.2 3.2 0 0 0 8.5 20h7a3.2 3.2 0 0 0 2.7-4.7L14 8.2V3"
+                            />
+
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M7.6 14h8.8"
+                            />
+                          </svg>
                         </div>
                       </div>
 
-                      <div
-                        className={`border-t pt-5 ${
-                          isDarkMode
-                            ? "border-slate-800"
-                            : "border-slate-200"
-                        }`}
-                      >
-                        <p
-                          className={`text-[11px] uppercase tracking-wider font-medium ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          Table 5 Basis
-                        </p>
-
+                      {chemicalAdmixture ===
+                      "None" ? (
                         <div
-                          className={`mt-3 p-4 rounded-[16px] ${
+                          className={`mt-5 rounded-[16px] p-4 ${
                             isDarkMode
                               ? "bg-[#1e1f20]"
                               : "bg-white"
@@ -2432,140 +2448,295 @@ export default function MixDesignCalculator({
                           <p
                             className={`text-[13px] ${
                               isDarkMode
-                                ? "text-slate-300"
-                                : "text-slate-700"
+                                ? "text-slate-400"
+                                : "text-slate-500"
                             }`}
                           >
-                            {maxAggregateSize} mm,
-                            {" "}
-                            {fineAggregateZone},
-                            {" "}
-                            base CA fraction{" "}
-                            {mixResult.baseCoarseAggregateFraction.toFixed(
-                              2
-                            )}
+                            No chemical admixture has
+                            been selected.
                           </p>
+                        </div>
+                      ) : (
+                        <div className="mt-5 grid grid-cols-2 gap-3">
 
+                          <SmallMetric
+                            label="Dosage"
+                            value={`${chemicalAdmixtureDosage.toFixed(
+                              2
+                            )}%`}
+                            isDarkMode={
+                              isDarkMode
+                            }
+                          />
+
+                          <SmallMetric
+                            label="Specific Gravity"
+                            value={chemicalAdmixtureSG.toFixed(
+                              3
+                            )}
+                            isDarkMode={
+                              isDarkMode
+                            }
+                          />
+
+                          <SmallMetric
+                            label="Quantity"
+                            value={`${mixResult.chemicalAdmixtureContent.toFixed(
+                              2
+                            )} kg/m³`}
+                            highlighted
+                            isDarkMode={
+                              isDarkMode
+                            }
+                          />
+
+                          <SmallMetric
+                            label="Volume"
+                            value={`${mixResult.chemicalAdmixtureVolume.toFixed(
+                              4
+                            )} m³`}
+                            isDarkMode={
+                              isDarkMode
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {chemicalAdmixture !==
+                        "None" && (
+                        <div
+                          className={`mt-4 rounded-[16px] p-4 ${
+                            isDarkMode
+                              ? "bg-[#1e1f20]"
+                              : "bg-white"
+                          }`}
+                        >
                           <p
-                            className={`mt-1 text-[12px] ${
+                            className={`text-[11px] uppercase tracking-wider font-medium ${
                               isDarkMode
                                 ? "text-slate-500"
                                 : "text-slate-500"
                             }`}
                           >
-                            Corrected using adopted W/B
-                            ratio and placing condition.
+                            Quantity Calculation
+                          </p>
+
+                          <p
+                            className={`mt-2 text-[14px] ${
+                              isDarkMode
+                                ? "text-slate-300"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            {mixResult.cementitiousContent.toFixed(
+                              0
+                            )}{" "}
+                            kg/m³ ×{" "}
+                            {chemicalAdmixtureDosage.toFixed(
+                              2
+                            )}
+                            % ={" "}
+                            <span className="font-semibold">
+                              {mixResult.chemicalAdmixtureContent.toFixed(
+                                2
+                              )}{" "}
+                              kg/m³
+                            </span>
                           </p>
                         </div>
-                      </div>
+                      )}
+                    </div>
+
+                    {/* AGGREGATE DETAILS */}
+
+                    <div
+                      className={`rounded-[24px] border p-7 ${
+                        isDarkMode
+                          ? "bg-[#131314] border-slate-800"
+                          : "bg-[#f8fafc] border-slate-200"
+                      }`}
+                    >
+                      <p
+                        className={`text-[11px] uppercase tracking-wider font-semibold ${
+                          isDarkMode
+                            ? "text-slate-500"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        Aggregate Proportion
+                      </p>
+
+                      <p
+                        className={`mt-2 text-3xl font-medium ${
+                          isDarkMode
+                            ? "text-white"
+                            : "text-slate-800"
+                        }`}
+                      >
+                        {
+                          mixResult.correctedCoarseAggregateFraction.toFixed(
+                            3
+                          )
+                        }{" "}
+                        CA
+                      </p>
+
+                      <p
+                        className={`mt-1 text-[13px] ${
+                          isDarkMode
+                            ? "text-slate-400"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        CA / total aggregate volume
+                      </p>
 
                       <div
-                        className={`border-t pt-5 ${
+                        className={`mt-4 p-4 rounded-[16px] ${
                           isDarkMode
-                            ? "border-slate-800"
-                            : "border-slate-200"
+                            ? "bg-[#1e1f20]"
+                            : "bg-white"
                         }`}
                       >
                         <p
-                          className={`text-[11px] uppercase tracking-wider font-medium ${
+                          className={`text-[13px] ${
+                            isDarkMode
+                              ? "text-slate-300"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          Fine aggregate fraction:{" "}
+                          <strong>
+                            {
+                              mixResult.fineAggregateFraction.toFixed(
+                                3
+                              )
+                            }
+                          </strong>
+                        </p>
+
+                        <p
+                          className={`mt-1 text-[12px] ${
                             isDarkMode
                               ? "text-slate-500"
                               : "text-slate-500"
                           }`}
                         >
-                          Mix Ratio
-                        </p>
-
-                        <p
-                          className={`mt-2 text-3xl font-medium ${
-                            isDarkMode
-                              ? "text-white"
-                              : "text-slate-800"
-                          }`}
-                        >
-                          1 :{" "}
+                          {maxAggregateSize} mm,{" "}
                           {
-                            (
-                              mixResult.fineAggregateSSD /
-                              mixResult.cementitiousContent
-                            ).toFixed(
-                              2
-                            )
-                          }{" "}
-                          :{" "}
-                          {
-                            (
-                              mixResult.coarseAggregateSSD /
-                              mixResult.cementitiousContent
-                            ).toFixed(
-                              2
-                            )
+                            fineAggregateZone
                           }
-                        </p>
-
-                        <p
-                          className={`mt-1 text-[12px] ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          Binder : FA : CA
-                        </p>
-                      </div>
-
-                      <div
-                        className={`border-t pt-5 ${
-                          isDarkMode
-                            ? "border-slate-800"
-                            : "border-slate-200"
-                        }`}
-                      >
-                        <p
-                          className={`text-[11px] uppercase tracking-wider font-medium ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          Absolute Volume Check
-                        </p>
-
-                        <p
-                          className={`mt-2 text-lg font-medium ${
-                            Math.abs(
-                              mixResult.volumeCheck -
-                                1
-                            ) < 0.005
-                              ? isDarkMode
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
-                              : isDarkMode
-                              ? "text-amber-400"
-                              : "text-amber-600"
-                          }`}
-                        >
-                          {
-                            mixResult.volumeCheck.toFixed(
-                              4
-                            )
-                          }{" "}
-                          m³
-                        </p>
-
-                        <p
-                          className={`mt-1 text-[12px] ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          Target unit volume = 1.0000
-                          m³
                         </p>
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* ================================================== */}
+              {/* MIX RATIO + VOLUME CHECK                         */}
+              {/* ================================================== */}
+
+              <div
+                className={`grid grid-cols-1 md:grid-cols-2 gap-6`}
+              >
+                <div
+                  className={`rounded-[24px] border p-7 ${
+                    isDarkMode
+                      ? "bg-[#131314] border-slate-800"
+                      : "bg-[#f8fafc] border-slate-200"
+                  }`}
+                >
+                  <p
+                    className={`text-[11px] uppercase tracking-wider font-medium ${
+                      isDarkMode
+                        ? "text-slate-500"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    Mix Ratio
+                  </p>
+
+                  <p
+                    className={`mt-2 text-3xl font-medium ${
+                      isDarkMode
+                        ? "text-white"
+                        : "text-slate-800"
+                    }`}
+                  >
+                    1 :{" "}
+                    {(
+                      mixResult.fineAggregateSSD /
+                      mixResult.cementitiousContent
+                    ).toFixed(
+                      2
+                    )}{" "}
+                    :{" "}
+                    {(
+                      mixResult.coarseAggregateSSD /
+                      mixResult.cementitiousContent
+                    ).toFixed(
+                      2
+                    )}
+                  </p>
+
+                  <p
+                    className={`mt-1 text-[12px] ${
+                      isDarkMode
+                        ? "text-slate-500"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    Binder : FA : CA
+                  </p>
+                </div>
+
+                <div
+                  className={`rounded-[24px] border p-7 ${
+                    isDarkMode
+                      ? "bg-[#131314] border-slate-800"
+                      : "bg-[#f8fafc] border-slate-200"
+                  }`}
+                >
+                  <p
+                    className={`text-[11px] uppercase tracking-wider font-medium ${
+                      isDarkMode
+                        ? "text-slate-500"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    Absolute Volume Check
+                  </p>
+
+                  <p
+                    className={`mt-2 text-3xl font-medium ${
+                      Math.abs(
+                        mixResult.volumeCheck -
+                          1
+                      ) < 0.005
+                        ? isDarkMode
+                          ? "text-emerald-400"
+                          : "text-emerald-600"
+                        : isDarkMode
+                        ? "text-amber-400"
+                        : "text-amber-600"
+                    }`}
+                  >
+                    {mixResult.volumeCheck.toFixed(
+                      4
+                    )}{" "}
+                    m³
+                  </p>
+
+                  <p
+                    className={`mt-1 text-[12px] ${
+                      isDarkMode
+                        ? "text-slate-500"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    Target unit volume = 1.0000 m³
+                  </p>
                 </div>
               </div>
 
@@ -2658,6 +2829,56 @@ function ResultRow({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+// ============================================================
+// SMALL METRIC
+// ============================================================
+
+function SmallMetric({
+  label,
+  value,
+  highlighted = false,
+  isDarkMode,
+}: {
+  label: string;
+  value: string;
+  highlighted?: boolean;
+  isDarkMode: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[16px] p-4 ${
+        isDarkMode
+          ? "bg-[#1e1f20]"
+          : "bg-white"
+      }`}
+    >
+      <p
+        className={`text-[10px] uppercase tracking-wider font-medium ${
+          isDarkMode
+            ? "text-slate-500"
+            : "text-slate-400"
+        }`}
+      >
+        {label}
+      </p>
+
+      <p
+        className={`mt-1 text-[15px] font-medium ${
+          highlighted
+            ? isDarkMode
+              ? "text-amber-400"
+              : "text-amber-700"
+            : isDarkMode
+            ? "text-slate-200"
+            : "text-slate-800"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

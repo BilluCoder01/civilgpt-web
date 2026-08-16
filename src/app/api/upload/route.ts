@@ -32,8 +32,6 @@ if (!supabaseServiceKey) {
   );
 }
 
-// Server-side admin client.
-// The service role is NEVER exposed to the browser.
 const supabaseAdmin = createClient(
   supabaseUrl,
   supabaseServiceKey
@@ -60,21 +58,59 @@ type UploadRequest = {
   title?: string;
 };
 
+type ParsedStandardChunk = {
+  content: string;
+
+  chunk_index: number;
+
+  page_number: number | null;
+
+  clause_no: string | null;
+
+  sub_clause_no: string | null;
+
+  table_no: string | null;
+
+  figure_no: string | null;
+
+  annex_no: string | null;
+
+  section_title: string | null;
+};
+
 // ============================================================
 // PDF EXTRACTION
 // ============================================================
 
-async function extractPdf(
+async function createPdfParser(
   buffer: Buffer
 ) {
-  // pdf-parse v2.x can require the worker explicitly in a
-  // Node.js server environment.
   const { CanvasFactory } = await import(
     "pdf-parse/worker"
   );
 
   const { PDFParse } = await import(
     "pdf-parse"
+  );
+
+  return {
+    PDFParse,
+    CanvasFactory,
+    buffer,
+  };
+}
+
+/**
+ * Reads page count from pdf-parse.
+ */
+async function getPdfPageCount(
+  buffer: Buffer
+): Promise<number> {
+  const {
+    PDFParse,
+    CanvasFactory,
+  } = await createPdfParser(
+    buffer
   );
 
   const parser = new PDFParse({
@@ -84,16 +120,59 @@ async function extractPdf(
 
   try {
     const result =
-      await parser.getText();
+      await parser.getInfo({
+        parsePageInfo: true,
+      });
 
-    return result;
+    return Number(
+      result.total || 0
+    );
+  } finally {
+    await parser.destroy();
+  }
+}
+
+/**
+ * Extract text from one page.
+ *
+ * pdf-parse v2 supports:
+ *
+ * parser.getText({ partial: [pageNumber] })
+ *
+ * where pages are 1-indexed.
+ */
+async function extractSinglePageText(
+  buffer: Buffer,
+  pageNumber: number
+): Promise<string> {
+  const {
+    PDFParse,
+    CanvasFactory,
+  } = await createPdfParser(
+    buffer
+  );
+
+  const parser = new PDFParse({
+    data: buffer,
+    CanvasFactory,
+  });
+
+  try {
+    const result =
+      await parser.getText({
+        partial: [
+          pageNumber,
+        ],
+      });
+
+    return result.text || "";
   } finally {
     await parser.destroy();
   }
 }
 
 // ============================================================
-// SHA-256
+// HASH
 // ============================================================
 
 function getDocumentHash(
@@ -105,10 +184,10 @@ function getDocumentHash(
 }
 
 // ============================================================
-// TEXT CLEANING
+// TEXT HELPERS
 // ============================================================
 
-function cleanText(
+function normalizeWhitespace(
   text: string
 ): string {
   return text
@@ -117,14 +196,649 @@ function cleanText(
       ""
     )
     .replace(
-      /\s+/g,
+      /\r\n/g,
+      "\n"
+    )
+    .replace(
+      /\r/g,
+      "\n"
+    )
+    .replace(
+      /[ \t]+/g,
       " "
     )
     .trim();
 }
 
+/**
+ * Converts a page's text into reasonably sized chunks while
+ * preserving line boundaries where possible.
+ */
+function chunkPageText(
+  text: string,
+  maxCharacters = 1000
+): string[] {
+  const normalized =
+    normalizeWhitespace(
+      text
+    );
+
+  if (!normalized) {
+    return [];
+  }
+
+  const lines =
+    normalized
+      .split("\n")
+      .map((line) =>
+        line.trim()
+      )
+      .filter(Boolean);
+
+  const chunks: string[] = [];
+
+  let current = "";
+
+  for (
+    const line of lines
+  ) {
+    const candidate =
+      current.length === 0
+        ? line
+        : `${current}\n${line}`;
+
+    if (
+      candidate.length <=
+      maxCharacters
+    ) {
+      current =
+        candidate;
+      continue;
+    }
+
+    if (
+      current.length > 0
+    ) {
+      chunks.push(
+        current.trim()
+      );
+    }
+
+    // Extremely long individual line.
+    if (
+      line.length >
+      maxCharacters
+    ) {
+      for (
+        let i = 0;
+        i < line.length;
+        i += maxCharacters
+      ) {
+        chunks.push(
+          line.substring(
+            i,
+            i +
+              maxCharacters
+          )
+        );
+      }
+
+      current = "";
+    } else {
+      current = line;
+    }
+  }
+
+  if (
+    current.length > 0
+  ) {
+    chunks.push(
+      current.trim()
+    );
+  }
+
+  return chunks;
+}
+
 // ============================================================
-// STORAGE PATH VALIDATION
+// CODE STRUCTURE DETECTION
+// ============================================================
+
+function detectClauseHeading(
+  line: string
+): {
+  clause: string;
+  title: string | null;
+} | null {
+  const value =
+    line
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+  /*
+   * Matches common IS-code clause headings such as:
+   *
+   * 5
+   * 5 Design Requirements
+   * 5.2
+   * 5.2 Water Content
+   * 5.2.1 General
+   * 5.2.1.1 Something
+   *
+   * We intentionally avoid treating a line like:
+   *
+   * 20 30 40 50
+   *
+   * as a clause.
+   */
+
+  const match =
+    value.match(
+      /^(\d+(?:\.\d+){0,4})(?:\s+|$)(.*)$/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const clause =
+    match[1];
+
+  const title =
+    match[2]?.trim() ||
+    null;
+
+  // Reject things that look like pure numeric data.
+  if (
+    !title &&
+    clause.includes(".")
+  ) {
+    return {
+      clause,
+      title: null,
+    };
+  }
+
+  if (
+    title &&
+    /^[\d\s.,%+\-/:()]+$/.test(
+      title
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    clause,
+    title,
+  };
+}
+
+function detectTable(
+  line: string
+): string | null {
+  const value =
+    line.trim();
+
+  const match =
+    value.match(
+      /^(?:table)\s+([A-Za-z]?\d+(?:\.\d+)*)\b/i
+    );
+
+  return match
+    ? match[1]
+    : null;
+}
+
+function detectFigure(
+  line: string
+): string | null {
+  const value =
+    line.trim();
+
+  const match =
+    value.match(
+      /^(?:figure|fig\.)\s+([A-Za-z]?\d+(?:\.\d+)*)\b/i
+    );
+
+  return match
+    ? match[1]
+    : null;
+}
+
+function detectAnnex(
+  line: string
+): string | null {
+  const value =
+    line.trim();
+
+  const match =
+    value.match(
+      /^(?:annex)\s+([A-Za-z](?:\s*[-–—]\s*.*)?)/i
+    );
+
+  return match
+    ? match[1].trim()
+    : null;
+}
+
+function detectSectionTitle(
+  line: string
+): string | null {
+  const value =
+    line
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+  if (
+    value.length < 3 ||
+    value.length > 160
+  ) {
+    return null;
+  }
+
+  // Don't treat tables/figures/annexes as generic sections.
+  if (
+    /^table\s+/i.test(
+      value
+    ) ||
+    /^figure\s+/i.test(
+      value
+    ) ||
+    /^fig\.\s+/i.test(
+      value
+    ) ||
+    /^annex\s+/i.test(
+      value
+    )
+  ) {
+    return null;
+  }
+
+  const looksLikeHeading =
+    value ===
+      value.toUpperCase() &&
+    /[A-Z]/.test(
+      value
+    );
+
+  if (
+    looksLikeHeading
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+// ============================================================
+// STANDARD PAGE PARSER
+// ============================================================
+
+function parsePageIntoChunks(
+  pageText: string,
+  pageNumber: number,
+  startingChunkIndex: number
+): {
+  chunks: ParsedStandardChunk[];
+  state: {
+    clauseNo: string | null;
+    tableNo: string | null;
+    figureNo: string | null;
+    annexNo: string | null;
+    sectionTitle: string | null;
+  };
+  nextChunkIndex: number;
+} {
+  const normalized =
+    normalizeWhitespace(
+      pageText
+    );
+
+  if (!normalized) {
+    return {
+      chunks: [],
+      state: {
+        clauseNo: null,
+        tableNo: null,
+        figureNo: null,
+        annexNo: null,
+        sectionTitle: null,
+      },
+      nextChunkIndex:
+        startingChunkIndex,
+    };
+  }
+
+  const rawLines =
+    normalized
+      .split("\n")
+      .map((line) =>
+        line.trim()
+      )
+      .filter(Boolean);
+
+  let clauseNo:
+    | string
+    | null = null;
+
+  let tableNo:
+    | string
+    | null = null;
+
+  let figureNo:
+    | string
+    | null = null;
+
+  let annexNo:
+    | string
+    | null = null;
+
+  let sectionTitle:
+    | string
+    | null = null;
+
+  /*
+   * We maintain citation state while reading the page.
+   * Every chunk gets the most recent applicable citation
+   * context.
+   */
+
+  const annotatedLines:
+    Array<{
+      text: string;
+
+      clauseNo:
+        | string
+        | null;
+
+      tableNo:
+        | string
+        | null;
+
+      figureNo:
+        | string
+        | null;
+
+      annexNo:
+        | string
+        | null;
+
+      sectionTitle:
+        | string
+        | null;
+    }> = [];
+
+  for (
+    const line of rawLines
+  ) {
+    const clause =
+      detectClauseHeading(
+        line
+      );
+
+    if (clause) {
+      clauseNo =
+        clause.clause;
+
+      if (
+        clause.title
+      ) {
+        sectionTitle =
+          clause.title;
+      }
+    }
+
+    const table =
+      detectTable(
+        line
+      );
+
+    if (table) {
+      tableNo =
+        table;
+    }
+
+    const figure =
+      detectFigure(
+        line
+      );
+
+    if (figure) {
+      figureNo =
+        figure;
+    }
+
+    const annex =
+      detectAnnex(
+        line
+      );
+
+    if (annex) {
+      annexNo =
+        annex;
+    }
+
+    const section =
+      detectSectionTitle(
+        line
+      );
+
+    if (section) {
+      sectionTitle =
+        section;
+    }
+
+    annotatedLines.push({
+      text: line,
+
+      clauseNo,
+
+      tableNo,
+
+      figureNo,
+
+      annexNo,
+
+      sectionTitle,
+    });
+  }
+
+  const pageChunks: ParsedStandardChunk[] =
+    [];
+
+  let currentLines: string[] =
+    [];
+
+  let currentCitation:
+    | {
+        clauseNo:
+          | string
+          | null;
+
+        tableNo:
+          | string
+          | null;
+
+        figureNo:
+          | string
+          | null;
+
+        annexNo:
+          | string
+          | null;
+
+        sectionTitle:
+          | string
+          | null;
+      }
+    | null = null;
+
+  const flush =
+    () => {
+      if (
+        currentLines.length ===
+        0
+      ) {
+        return;
+      }
+
+      const content =
+        currentLines
+          .join("\n")
+          .trim();
+
+      if (!content) {
+        currentLines = [];
+        return;
+      }
+
+      pageChunks.push({
+        content,
+
+        chunk_index:
+          startingChunkIndex +
+          pageChunks.length,
+
+        page_number:
+          pageNumber,
+
+        clause_no:
+          currentCitation
+            ?.clauseNo ??
+          null,
+
+        sub_clause_no:
+          null,
+
+        table_no:
+          currentCitation
+            ?.tableNo ??
+          null,
+
+        figure_no:
+          currentCitation
+            ?.figureNo ??
+          null,
+
+        annex_no:
+          currentCitation
+            ?.annexNo ??
+          null,
+
+        section_title:
+          currentCitation
+            ?.sectionTitle ??
+          null,
+      });
+
+      currentLines = [];
+    };
+
+  for (
+    const annotated of annotatedLines
+  ) {
+    const line =
+      annotated.text;
+
+    const citationChanged =
+      currentCitation ===
+        null ||
+      currentCitation.clauseNo !==
+        annotated.clauseNo ||
+      currentCitation.tableNo !==
+        annotated.tableNo ||
+      currentCitation.figureNo !==
+        annotated.figureNo ||
+      currentCitation.annexNo !==
+        annotated.annexNo ||
+      currentCitation.sectionTitle !==
+        annotated.sectionTitle;
+
+    /*
+     * Start a new semantic chunk when:
+     *
+     * 1. citation context changes, or
+     * 2. current chunk approaches the character limit.
+     */
+    const currentLength =
+      currentLines
+        .join("\n")
+        .length;
+
+    if (
+      citationChanged &&
+      currentLines.length >
+        0
+    ) {
+      flush();
+    }
+
+    if (
+      currentLines.length >
+        0 &&
+      currentLength +
+        line.length +
+        1 >
+        1000
+    ) {
+      flush();
+    }
+
+    currentLines.push(
+      line
+    );
+
+    currentCitation = {
+      clauseNo:
+        annotated.clauseNo,
+
+      tableNo:
+        annotated.tableNo,
+
+      figureNo:
+        annotated.figureNo,
+
+      annexNo:
+        annotated.annexNo,
+
+      sectionTitle:
+        annotated.sectionTitle,
+    };
+  }
+
+  flush();
+
+  return {
+    chunks:
+      pageChunks,
+
+    state: {
+      clauseNo,
+
+      tableNo,
+
+      figureNo,
+
+      annexNo,
+
+      sectionTitle,
+    },
+
+    nextChunkIndex:
+      startingChunkIndex +
+      pageChunks.length,
+  };
+}
+
+// ============================================================
+// STORAGE
 // ============================================================
 
 function isUserStoragePath(
@@ -142,10 +856,6 @@ function isUserStoragePath(
       expectedPrefix.length
   );
 }
-
-// ============================================================
-// DELETE STORAGE OBJECT
-// ============================================================
 
 async function deleteStorageFile(
   storagePath: string
@@ -177,7 +887,7 @@ async function deleteStorageFile(
 }
 
 // ============================================================
-// JSON RESPONSE HELPER
+// JSON ERROR
 // ============================================================
 
 function errorResponse(
@@ -207,7 +917,7 @@ export async function POST(
 
   try {
     // ========================================================
-    // AUTHENTICATION
+    // AUTH
     // ========================================================
 
     const cookieStore =
@@ -241,16 +951,7 @@ export async function POST(
     }
 
     // ========================================================
-    // REQUEST BODY
-    // ========================================================
-    //
-    // IMPORTANT:
-    // The PDF itself is NO LONGER sent here.
-    //
-    // The browser uploads the PDF directly to Supabase
-    // Storage and this endpoint receives only a small JSON
-    // payload containing the Storage path and metadata.
-    //
+    // JSON REQUEST
     // ========================================================
 
     let body: UploadRequest;
@@ -268,16 +969,13 @@ export async function POST(
     const {
       storagePath,
       filename,
-      uploadType = "engineering",
+      uploadType =
+        "engineering",
       isNumber = "",
       editionYear:
         editionYearRaw = "",
       title = "",
     } = body;
-
-    // ========================================================
-    // BASIC VALIDATION
-    // ========================================================
 
     if (!storagePath) {
       return errorResponse(
@@ -320,19 +1018,17 @@ export async function POST(
       );
     }
 
-    // ========================================================
-    // PDF FILENAME VALIDATION
-    // ========================================================
-
-    const isPdf =
-      filename
+    if (
+      !filename
         .toLowerCase()
-        .endsWith(".pdf");
-
-    if (!isPdf) {
+        .endsWith(".pdf")
+    ) {
       await deleteStorageFile(
         storagePath
       );
+
+      storagePathForCleanup =
+        null;
 
       return errorResponse(
         "Only PDF files are supported.",
@@ -341,7 +1037,7 @@ export async function POST(
     }
 
     // ========================================================
-    // STANDARD METADATA VALIDATION
+    // STANDARD VALIDATION
     // ========================================================
 
     const normalizedIsNumber =
@@ -368,6 +1064,9 @@ export async function POST(
           storagePath
         );
 
+        storagePathForCleanup =
+          null;
+
         return errorResponse(
           "IS Standard number is required.",
           400
@@ -386,6 +1085,9 @@ export async function POST(
           storagePath
         );
 
+        storagePathForCleanup =
+          null;
+
         return errorResponse(
           "A valid standard edition year is required.",
           400
@@ -398,6 +1100,9 @@ export async function POST(
         await deleteStorageFile(
           storagePath
         );
+
+        storagePathForCleanup =
+          null;
 
         return errorResponse(
           "IS Standard title is required.",
@@ -426,35 +1131,16 @@ export async function POST(
     if (
       storageDownloadError
     ) {
-      console.error(
-        "Storage download error:",
-        storageDownloadError
-      );
-
-      await deleteStorageFile(
-        storagePath
-      );
-
-      return errorResponse(
-        `Failed to access uploaded PDF: ${storageDownloadError.message}`,
-        500
+      throw new Error(
+        `Failed to access uploaded PDF: ${storageDownloadError.message}`
       );
     }
 
     if (!storageFile) {
-      await deleteStorageFile(
-        storagePath
-      );
-
-      return errorResponse(
-        "Uploaded PDF could not be found in Storage.",
-        404
+      throw new Error(
+        "Uploaded PDF could not be found in Storage."
       );
     }
-
-    // ========================================================
-    // BUFFER
-    // ========================================================
 
     const buffer =
       Buffer.from(
@@ -462,15 +1148,11 @@ export async function POST(
       );
 
     if (
-      buffer.length === 0
+      buffer.length ===
+      0
     ) {
-      await deleteStorageFile(
-        storagePath
-      );
-
-      return errorResponse(
-        "Uploaded PDF is empty.",
-        400
+      throw new Error(
+        "Uploaded PDF is empty."
       );
     }
 
@@ -484,7 +1166,7 @@ export async function POST(
       );
 
     // ========================================================
-    // DUPLICATE CHECK — ENGINEERING PDF
+    // DUPLICATE — ENGINEERING
     // ========================================================
 
     if (
@@ -502,7 +1184,7 @@ export async function POST(
             "engineering_documents"
           )
           .select(
-            "id, metadata, storage_path"
+            "id, metadata"
           )
           .eq(
             "user_id",
@@ -524,17 +1206,18 @@ export async function POST(
       if (
         existingDocument
       ) {
+        await deleteStorageFile(
+          storagePath
+        );
+
+        storagePathForCleanup =
+          null;
+
         const existingFilename =
           existingDocument
             .metadata
             ?.filename ||
           filename;
-
-        // The browser already uploaded this new copy
-        // to Storage. Remove that duplicate copy.
-        await deleteStorageFile(
-          storagePath
-        );
 
         return NextResponse.json(
           {
@@ -548,16 +1231,13 @@ export async function POST(
             documentHash,
             message:
               "This PDF is already in your engineering knowledge base.",
-          },
-          {
-            status: 200,
           }
         );
       }
     }
 
     // ========================================================
-    // DUPLICATE CHECK — IS STANDARD
+    // DUPLICATE — STANDARD
     // ========================================================
 
     if (
@@ -566,7 +1246,7 @@ export async function POST(
     ) {
       const {
         data:
-          existingStandard,
+          existingStandardDocument,
         error:
           standardLookupError,
       } =
@@ -575,7 +1255,7 @@ export async function POST(
             "standard_documents"
           )
           .select(
-            "id, filename, standard_id, storage_path"
+            "id, filename"
           )
           .eq(
             "user_id",
@@ -595,12 +1275,14 @@ export async function POST(
       }
 
       if (
-        existingStandard
+        existingStandardDocument
       ) {
-        // Remove the newly uploaded duplicate.
         await deleteStorageFile(
           storagePath
         );
+
+        storagePathForCleanup =
+          null;
 
         return NextResponse.json(
           {
@@ -610,252 +1292,200 @@ export async function POST(
             uploadType:
               "standard",
             filename:
-              existingStandard.filename,
+              existingStandardDocument.filename,
             documentHash,
             message:
               "This IS Standard PDF is already in your standards library.",
-          },
-          {
-            status: 200,
           }
         );
       }
     }
 
     // ========================================================
-    // EXTRACT PDF TEXT
-    // ========================================================
-
-    const parsedPdf =
-      await extractPdf(
-        buffer
-      );
-
-    const rawText =
-      parsedPdf.text ||
-      "";
-
-    const cleanFullText =
-      cleanText(
-        rawText
-      );
-
-    if (
-      cleanFullText.length ===
-      0
-    ) {
-      await deleteStorageFile(
-        storagePath
-      );
-
-      return errorResponse(
-        "No readable text was found in the PDF.",
-        400
-      );
-    }
-
-    // ========================================================
-    // ENGINEERING PDF
+    // ENGINEERING DOCUMENT
     // ========================================================
 
     if (
       uploadType ===
       "engineering"
     ) {
-      // ------------------------------------------------------
-      // CHUNK
-      // ------------------------------------------------------
-
-      const chunks: string[] =
-        [];
-
-      for (
-        let i = 0;
-        i <
-        cleanFullText.length;
-        i += 1000
-      ) {
-        const chunk =
-          cleanFullText.substring(
-            i,
-            i + 1000
-          );
-
-        if (
-          chunk.trim()
-            .length > 0
-        ) {
-          chunks.push(
-            chunk.trim()
-          );
-        }
-      }
-
-      if (
-        chunks.length === 0
-      ) {
-        await deleteStorageFile(
-          storagePath
-        );
-
-        return errorResponse(
-          "No readable text chunks were produced from the PDF.",
-          400
-        );
-      }
-
-      // ------------------------------------------------------
-      // EMBEDDINGS
-      // ------------------------------------------------------
-
       const {
-        embeddings,
+        PDFParse,
+        CanvasFactory,
       } =
-        await embedMany({
-          model:
-            google.textEmbeddingModel(
-              "gemini-embedding-2"
-            ),
-          values:
-            chunks,
+        await createPdfParser(
+          buffer
+        );
+
+      const parser =
+        new PDFParse({
+          data: buffer,
+          CanvasFactory,
         });
 
-      if (
-        embeddings.length !==
-        chunks.length
-      ) {
-        throw new Error(
-          `Embedding count mismatch. Expected ${chunks.length}, got ${embeddings.length}.`
-        );
-      }
+      try {
+        const result =
+          await parser.getText();
 
-      // ------------------------------------------------------
-      // DATABASE ROWS
-      // ------------------------------------------------------
-
-      const rowsToInsert =
-        chunks.map(
-          (
-            chunk,
-            index
-          ) => ({
-            content:
-              chunk,
-
-            embedding:
-              embeddings[
-                index
-              ].slice(
-                0,
-                768
-              ),
-
-            metadata: {
-              filename,
-              chunk_index:
-                index,
-
-              upload_type:
-                "engineering",
-            },
-
-            user_id:
-              user.id,
-
-            document_hash:
-              documentHash,
-
-            storage_path:
-              storagePath,
-          })
-        );
-
-      // ------------------------------------------------------
-      // INSERT
-      // ------------------------------------------------------
-
-      const {
-        error:
-          insertError,
-      } =
-        await supabaseAdmin
-          .from(
-            "engineering_documents"
-          )
-          .insert(
-            rowsToInsert
+        const cleanFullText =
+          normalizeWhitespace(
+            result.text ||
+              ""
           );
 
-      if (
-        insertError
-      ) {
-        // Race condition protection.
         if (
-          insertError.code ===
-          "23505"
+          !cleanFullText
         ) {
-          await deleteStorageFile(
-            storagePath
-          );
-
-          return NextResponse.json(
-            {
-              success: true,
-              duplicate:
-                true,
-              uploadType:
-                "engineering",
-              filename,
-              documentHash,
-              message:
-                "This PDF was already uploaded.",
-            },
-            {
-              status: 200,
-            }
+          throw new Error(
+            "No readable text was found in the PDF."
           );
         }
 
-        throw insertError;
+        const chunks =
+          chunkPageText(
+            cleanFullText,
+            1000
+          );
+
+        if (
+          chunks.length ===
+          0
+        ) {
+          throw new Error(
+            "No readable text chunks were produced from the PDF."
+          );
+        }
+
+        const {
+          embeddings,
+        } =
+          await embedMany({
+            model:
+              google.textEmbeddingModel(
+                "gemini-embedding-2"
+              ),
+            values:
+              chunks,
+          });
+
+        if (
+          embeddings.length !==
+          chunks.length
+        ) {
+          throw new Error(
+            `Embedding count mismatch. Expected ${chunks.length}, got ${embeddings.length}.`
+          );
+        }
+
+        const rowsToInsert =
+          chunks.map(
+            (
+              chunk,
+              index
+            ) => ({
+              content:
+                chunk,
+
+              embedding:
+                embeddings[
+                  index
+                ].slice(
+                  0,
+                  768
+                ),
+
+              metadata: {
+                filename,
+
+                chunk_index:
+                  index,
+
+                upload_type:
+                  "engineering",
+              },
+
+              user_id:
+                user.id,
+
+              document_hash:
+                documentHash,
+
+              storage_path:
+                storagePath,
+            })
+          );
+
+        const {
+          error:
+            insertError,
+        } =
+          await supabaseAdmin
+            .from(
+              "engineering_documents"
+            )
+            .insert(
+              rowsToInsert
+            );
+
+        if (
+          insertError
+        ) {
+          if (
+            insertError.code ===
+            "23505"
+          ) {
+            await deleteStorageFile(
+              storagePath
+            );
+
+            storagePathForCleanup =
+              null;
+
+            return NextResponse.json(
+              {
+                success: true,
+                duplicate:
+                  true,
+                uploadType:
+                  "engineering",
+                filename,
+                documentHash,
+                message:
+                  "This PDF was already uploaded.",
+              }
+            );
+          }
+
+          throw insertError;
+        }
+
+        storagePathForCleanup =
+          null;
+
+        return NextResponse.json(
+          {
+            success: true,
+            duplicate:
+              false,
+            uploadType:
+              "engineering",
+            filename,
+            documentHash,
+            storagePath,
+            chunks:
+              chunks.length,
+            message:
+              "PDF Memorized.",
+          }
+        );
+      } finally {
+        await parser.destroy();
       }
-
-      // ------------------------------------------------------
-      // SUCCESS
-      // ------------------------------------------------------
-
-      // We intentionally KEEP the Storage object.
-      // It is the source document associated with these rows.
-      storagePathForCleanup =
-        null;
-
-      return NextResponse.json(
-        {
-          success: true,
-          duplicate:
-            false,
-          uploadType:
-            "engineering",
-          filename,
-          documentHash,
-          storagePath,
-          chunks:
-            chunks.length,
-          message:
-            "PDF Memorized.",
-        },
-        {
-          status: 200,
-        }
-      );
     }
 
     // ========================================================
-    // STANDARD PDF
+    // STANDARD — FIND OR CREATE STANDARD
     // ========================================================
-
-    // --------------------------------------------------------
-    // FIND OR CREATE STANDARD
-    // --------------------------------------------------------
 
     let standardId:
       | string
@@ -905,13 +1535,8 @@ export async function POST(
         existingStandard.status !==
         "active"
       ) {
-        await deleteStorageFile(
-          storagePath
-        );
-
-        return errorResponse(
-          `This standard already exists with status "${existingStandard.status}". Review the existing standard before uploading another edition.`,
-          409
+        throw new Error(
+          `This standard already exists with status "${existingStandard.status}". Review the existing standard before uploading another edition.`
         );
       }
     } else {
@@ -970,9 +1595,15 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
-    // CREATE STANDARD DOCUMENT RECORD
-    // --------------------------------------------------------
+    // ========================================================
+    // CREATE STANDARD DOCUMENT
+    // ========================================================
+
+    // First determine page count.
+    const pageCount =
+      await getPdfPageCount(
+        buffer
+      );
 
     const {
       data:
@@ -998,6 +1629,7 @@ export async function POST(
               storagePath,
 
             page_count:
+              pageCount ||
               null,
 
             uploaded_at:
@@ -1023,6 +1655,9 @@ export async function POST(
           storagePath
         );
 
+        storagePathForCleanup =
+          null;
+
         return NextResponse.json(
           {
             success: true,
@@ -1034,9 +1669,6 @@ export async function POST(
             documentHash,
             message:
               "This IS Standard PDF is already in your standards library.",
-          },
-          {
-            status: 200,
           }
         );
       }
@@ -1044,92 +1676,60 @@ export async function POST(
       throw documentCreateError;
     }
 
-    // --------------------------------------------------------
-    // TRANSITIONAL STANDARD CHUNKING
-    // --------------------------------------------------------
-    //
-    // IMPORTANT:
-    // This is intentionally still the transitional chunker.
-    //
-    // We do NOT fabricate clause/table/page metadata.
-    // Those fields remain null until we implement the
-    // clause-aware/page-aware ingestion stage.
-    //
-    // --------------------------------------------------------
+    // ========================================================
+    // PAGE-AWARE STANDARD INGESTION
+    // ========================================================
 
-    const standardChunks: Array<{
-      content: string;
+    const allStandardChunks:
+      ParsedStandardChunk[] =
+      [];
 
-      chunk_index: number;
+    let nextChunkIndex =
+      0;
 
-      page_number: number | null;
-
-      clause_no: string | null;
-
-      sub_clause_no: string | null;
-
-      table_no: string | null;
-
-      figure_no: string | null;
-
-      annex_no: string | null;
-
-      section_title: string | null;
-    }> = [];
+    /*
+     * We extract each page separately so that page_number is
+     * real document metadata, not an estimate based on text
+     * length.
+     */
 
     for (
-      let i = 0,
-        chunkIndex = 0;
-      i <
-      cleanFullText.length;
-      i += 1000,
-      chunkIndex++
+      let pageNumber = 1;
+      pageNumber <=
+        pageCount;
+      pageNumber++
     ) {
-      const chunk =
-        cleanFullText.substring(
-          i,
-          i + 1000
+      const pageText =
+        await extractSinglePageText(
+          buffer,
+          pageNumber
         );
 
       if (
-        chunk.trim()
-          .length === 0
+        !normalizeWhitespace(
+          pageText
+        )
       ) {
         continue;
       }
 
-      standardChunks.push({
-        content:
-          chunk.trim(),
+      const parsed =
+        parsePageIntoChunks(
+          pageText,
+          pageNumber,
+          nextChunkIndex
+        );
 
-        chunk_index:
-          chunkIndex,
+      allStandardChunks.push(
+        ...parsed.chunks
+      );
 
-        page_number:
-          null,
-
-        clause_no:
-          null,
-
-        sub_clause_no:
-          null,
-
-        table_no:
-          null,
-
-        figure_no:
-          null,
-
-        annex_no:
-          null,
-
-        section_title:
-          null,
-      });
+      nextChunkIndex =
+        parsed.nextChunkIndex;
     }
 
     if (
-      standardChunks.length ===
+      allStandardChunks.length ===
       0
     ) {
       await supabaseAdmin
@@ -1146,19 +1746,14 @@ export async function POST(
           user.id
         );
 
-      await deleteStorageFile(
-        storagePath
-      );
-
-      return errorResponse(
-        "No readable standard chunks were produced from the PDF.",
-        400
+      throw new Error(
+        "No readable standard text was produced during page-aware ingestion."
       );
     }
 
-    // --------------------------------------------------------
-    // EMBEDDINGS
-    // --------------------------------------------------------
+    // ========================================================
+    // STANDARD EMBEDDINGS
+    // ========================================================
 
     const {
       embeddings,
@@ -1168,8 +1763,9 @@ export async function POST(
           google.textEmbeddingModel(
             "gemini-embedding-2"
           ),
+
         values:
-          standardChunks.map(
+          allStandardChunks.map(
             (chunk) =>
               chunk.content
           ),
@@ -1177,19 +1773,19 @@ export async function POST(
 
     if (
       embeddings.length !==
-      standardChunks.length
+      allStandardChunks.length
     ) {
       throw new Error(
-        `Embedding count mismatch. Expected ${standardChunks.length}, got ${embeddings.length}.`
+        `Embedding count mismatch. Expected ${allStandardChunks.length}, got ${embeddings.length}.`
       );
     }
 
-    // --------------------------------------------------------
+    // ========================================================
     // STANDARD CHUNK ROWS
-    // --------------------------------------------------------
+    // ========================================================
 
-    const rows =
-      standardChunks.map(
+    const standardRows =
+      allStandardChunks.map(
         (
           chunk,
           index
@@ -1240,9 +1836,9 @@ export async function POST(
         })
       );
 
-    // --------------------------------------------------------
+    // ========================================================
     // INSERT STANDARD CHUNKS
-    // --------------------------------------------------------
+    // ========================================================
 
     const {
       error:
@@ -1253,13 +1849,12 @@ export async function POST(
           "standard_chunks"
         )
         .insert(
-          rows
+          standardRows
         );
 
     if (
       chunkInsertError
     ) {
-      // Remove the document record.
       await supabaseAdmin
         .from(
           "standard_documents"
@@ -1274,17 +1869,12 @@ export async function POST(
           user.id
         );
 
-      // Remove the Storage object.
-      await deleteStorageFile(
-        storagePath
-      );
-
       throw chunkInsertError;
     }
 
-    // --------------------------------------------------------
+    // ========================================================
     // SUCCESS
-    // --------------------------------------------------------
+    // ========================================================
 
     storagePathForCleanup =
       null;
@@ -1292,13 +1882,19 @@ export async function POST(
     return NextResponse.json(
       {
         success: true,
+
         duplicate:
           false,
+
         uploadType:
           "standard",
+
         filename,
+
         documentHash,
+
         storagePath,
+
         standard: {
           id:
             standardId,
@@ -1311,14 +1907,14 @@ export async function POST(
 
           editionYear,
         },
+
+        pageCount,
+
         chunks:
-          standardChunks.length,
+          allStandardChunks.length,
 
         message:
-          "IS Standard added to your standards library.",
-      },
-      {
-        status: 200,
+          "IS Standard added to your standards library with page-aware citation metadata.",
       }
     );
   } catch (
@@ -1331,8 +1927,6 @@ export async function POST(
       "\n"
     );
 
-    // Only remove the uploaded object when this request
-    // did not successfully persist it.
     if (
       storagePathForCleanup
     ) {

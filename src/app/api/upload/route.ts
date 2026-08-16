@@ -22,12 +22,20 @@ const supabaseAdmin = createClient(
 );
 
 // ============================================================
-// PDF TEXT EXTRACTION
+// TYPES
 // ============================================================
 
-async function extractPdfText(
+type UploadType =
+  | "engineering"
+  | "standard";
+
+// ============================================================
+// PDF EXTRACTION
+// ============================================================
+
+async function extractPdf(
   buffer: Buffer
-): Promise<string> {
+) {
   const { CanvasFactory } = await import(
     "pdf-parse/worker"
   );
@@ -42,16 +50,17 @@ async function extractPdfText(
   });
 
   try {
-    const result = await parser.getText();
+    const result =
+      await parser.getText();
 
-    return result.text;
+    return result;
   } finally {
     await parser.destroy();
   }
 }
 
 // ============================================================
-// SHA-256 DOCUMENT HASH
+// HASH
 // ============================================================
 
 function getDocumentHash(
@@ -63,6 +72,19 @@ function getDocumentHash(
 }
 
 // ============================================================
+// CLEAN TEXT
+// ============================================================
+
+function cleanText(
+  text: string
+): string {
+  return text
+    .replace(/\u0000/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ============================================================
 // POST
 // ============================================================
 
@@ -70,9 +92,9 @@ export async function POST(
   req: Request
 ) {
   try {
-    // ----------------------------------------------------------
-    // AUTHENTICATION
-    // ----------------------------------------------------------
+    // ========================================================
+    // AUTH
+    // ========================================================
 
     const cookieStore =
       await cookies();
@@ -100,7 +122,8 @@ export async function POST(
     if (!user) {
       return NextResponse.json(
         {
-          error: "Unauthorized",
+          error:
+            "Unauthorized",
         },
         {
           status: 401,
@@ -108,9 +131,9 @@ export async function POST(
       );
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
     // FORM DATA
-    // ----------------------------------------------------------
+    // ========================================================
 
     const formData =
       await req.formData();
@@ -120,11 +143,43 @@ export async function POST(
         "file"
       ) as File | null;
 
+    const uploadType =
+      (
+        formData.get(
+          "uploadType"
+        ) || "engineering"
+      ).toString() as UploadType;
+
+    const isNumber =
+      formData
+        .get("isNumber")
+        ?.toString()
+        .trim() || "";
+
+    const editionYearRaw =
+      formData
+        .get("editionYear")
+        ?.toString()
+        .trim() || "";
+
+    const title =
+      formData
+        .get("title")
+        ?.toString()
+        .trim() || "";
+
+    const editionYear =
+      editionYearRaw
+        ? Number(
+            editionYearRaw
+          )
+        : null;
+
     if (!file) {
       return NextResponse.json(
         {
           error:
-            "No file uploaded",
+            "No file uploaded.",
         },
         {
           status: 400,
@@ -132,9 +187,26 @@ export async function POST(
       );
     }
 
-    // ----------------------------------------------------------
-    // FILE TYPE VALIDATION
-    // ----------------------------------------------------------
+    if (
+      uploadType !==
+        "engineering" &&
+      uploadType !==
+        "standard"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid upload type.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ========================================================
+    // PDF VALIDATION
+    // ========================================================
 
     const isPdf =
       file.type ===
@@ -155,9 +227,64 @@ export async function POST(
       );
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
+    // STANDARD METADATA VALIDATION
+    // ========================================================
+
+    if (
+      uploadType ===
+      "standard"
+    ) {
+      if (
+        !isNumber
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "IS Standard number is required.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        !editionYear ||
+        !Number.isInteger(
+          editionYear
+        ) ||
+        editionYear < 1900 ||
+        editionYear >
+          2100
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "A valid standard edition year is required.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (!title) {
+        return NextResponse.json(
+          {
+            error:
+              "IS Standard title is required.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+    }
+
+    // ========================================================
     // READ FILE
-    // ----------------------------------------------------------
+    // ========================================================
 
     const buffer =
       Buffer.from(
@@ -165,7 +292,8 @@ export async function POST(
       );
 
     if (
-      buffer.length === 0
+      buffer.length ===
+      0
     ) {
       return NextResponse.json(
         {
@@ -178,110 +306,162 @@ export async function POST(
       );
     }
 
-    // ----------------------------------------------------------
-    // GENERATE CONTENT HASH
-    // ----------------------------------------------------------
-    //
-    // This identifies the actual PDF bytes.
-    // Renaming the same PDF will still produce the same hash.
-    // ----------------------------------------------------------
+    // ========================================================
+    // HASH
+    // ========================================================
 
     const documentHash =
       getDocumentHash(
         buffer
       );
 
-    // ----------------------------------------------------------
-    // DUPLICATE CHECK
-    // ----------------------------------------------------------
-    //
-    // We check before PDF parsing and embedding so duplicate
-    // files consume virtually no processing time.
-    //
-    // Service-role client is intentional here because this is
-    // a trusted server-side operation after authenticating
-    // the user above.
-    // ----------------------------------------------------------
-
-    const {
-      data: existingDocument,
-      error:
-        duplicateCheckError,
-    } =
-      await supabaseAdmin
-        .from(
-          "engineering_documents"
-        )
-        .select("id, metadata")
-        .eq(
-          "user_id",
-          user.id
-        )
-        .eq(
-          "document_hash",
-          documentHash
-        )
-        .limit(1)
-        .maybeSingle();
+    // ========================================================
+    // DUPLICATE CHECK — ENGINEERING PDF
+    // ========================================================
 
     if (
-      duplicateCheckError
+      uploadType ===
+      "engineering"
     ) {
-      console.error(
-        "Duplicate check failed:",
+      const {
+        data:
+          existingDocument,
+        error:
+          duplicateCheckError,
+      } =
+        await supabaseAdmin
+          .from(
+            "engineering_documents"
+          )
+          .select(
+            "id, metadata"
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .eq(
+            "document_hash",
+            documentHash
+          )
+          .limit(1)
+          .maybeSingle();
+
+      if (
         duplicateCheckError
-      );
+      ) {
+        throw duplicateCheckError;
+      }
 
-      throw duplicateCheckError;
+      if (
+        existingDocument
+      ) {
+        const filename =
+          existingDocument
+            .metadata
+            ?.filename ||
+          file.name;
+
+        return NextResponse.json(
+          {
+            success: true,
+            duplicate:
+              true,
+            uploadType:
+              "engineering",
+            filename,
+            documentHash,
+            message:
+              "This PDF is already in your engineering knowledge base.",
+          },
+          {
+            status: 200,
+          }
+        );
+      }
     }
+
+    // ========================================================
+    // DUPLICATE CHECK — IS STANDARD
+    // ========================================================
 
     if (
-      existingDocument
+      uploadType ===
+      "standard"
     ) {
-      const existingFilename =
-        existingDocument
-          .metadata?.filename ||
-        file.name;
+      const {
+        data:
+          existingStandard,
+        error:
+          standardLookupError,
+      } =
+        await supabaseAdmin
+          .from(
+            "standard_documents"
+          )
+          .select(
+            "id, filename, standard_id"
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .eq(
+            "document_hash",
+            documentHash
+          )
+          .limit(1)
+          .maybeSingle();
 
-      return NextResponse.json(
-        {
-          success: true,
-          duplicate: true,
-          filename:
-            existingFilename,
-          documentHash,
-          message:
-            "This PDF is already in your engineering knowledge base.",
-        },
-        {
-          status: 200,
-        }
-      );
+      if (
+        standardLookupError
+      ) {
+        throw standardLookupError;
+      }
+
+      if (
+        existingStandard
+      ) {
+        return NextResponse.json(
+          {
+            success: true,
+            duplicate:
+              true,
+            uploadType:
+              "standard",
+            filename:
+              existingStandard.filename,
+            documentHash,
+            message:
+              "This IS Standard PDF is already in your standards library.",
+          },
+          {
+            status: 200,
+          }
+        );
+      }
     }
 
-    // ----------------------------------------------------------
-    // EXTRACT TEXT
-    // ----------------------------------------------------------
+    // ========================================================
+    // EXTRACT PDF
+    // ========================================================
 
-    const rawText =
-      await extractPdfText(
+    const parsedPdf =
+      await extractPdf(
         buffer
       );
 
-    const cleanText =
-      rawText
-        .replace(
-          /\u0000/g,
-          ""
-        )
-        .replace(
-          /\s+/g,
-          " "
-        )
-        .trim();
+    const rawText =
+      parsedPdf.text || "";
+
+    const cleanFullText =
+      cleanText(
+        rawText
+      );
 
     if (
-      cleanText.length === 0
+      cleanFullText.length ===
+      0
     ) {
       return NextResponse.json(
         {
@@ -294,49 +474,435 @@ export async function POST(
       );
     }
 
-    // ----------------------------------------------------------
-    // CHUNK TEXT
-    // ----------------------------------------------------------
+    // ========================================================
+    // ENGINEERING PDF
+    // ========================================================
 
-    const chunks: string[] = [];
+    if (
+      uploadType ===
+      "engineering"
+    ) {
+      const chunks: string[] =
+        [];
+
+      for (
+        let i = 0;
+        i <
+        cleanFullText.length;
+        i += 1000
+      ) {
+        const chunk =
+          cleanFullText.substring(
+            i,
+            i + 1000
+          );
+
+        if (
+          chunk.trim()
+            .length > 0
+        ) {
+          chunks.push(
+            chunk.trim()
+          );
+        }
+      }
+
+      const {
+        embeddings,
+      } =
+        await embedMany({
+          model:
+            google.textEmbeddingModel(
+              "gemini-embedding-2"
+            ),
+          values:
+            chunks,
+        });
+
+      if (
+        embeddings.length !==
+        chunks.length
+      ) {
+        throw new Error(
+          `Embedding count mismatch. Expected ${chunks.length}, got ${embeddings.length}.`
+        );
+      }
+
+      const rowsToInsert =
+        chunks.map(
+          (
+            chunk,
+            index
+          ) => ({
+            content:
+              chunk,
+
+            embedding:
+              embeddings[
+                index
+              ].slice(
+                0,
+                768
+              ),
+
+            metadata: {
+              filename:
+                file.name,
+
+              chunk_index:
+                index,
+            },
+
+            user_id:
+              user.id,
+
+            document_hash:
+              documentHash,
+          })
+        );
+
+      const {
+        error:
+          insertError,
+      } =
+        await supabaseAdmin
+          .from(
+            "engineering_documents"
+          )
+          .insert(
+            rowsToInsert
+          );
+
+      if (
+        insertError
+      ) {
+        if (
+          insertError.code ===
+          "23505"
+        ) {
+          return NextResponse.json(
+            {
+              success: true,
+              duplicate:
+                true,
+              uploadType:
+                "engineering",
+              filename:
+                file.name,
+              documentHash,
+              message:
+                "This PDF was already uploaded.",
+            },
+            {
+              status: 200,
+            }
+          );
+        }
+
+        throw insertError;
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          duplicate:
+            false,
+          uploadType:
+            "engineering",
+          filename:
+            file.name,
+          documentHash,
+          chunks:
+            chunks.length,
+          message:
+            "PDF Memorized.",
+        },
+        {
+          status: 200,
+        }
+      );
+    }
+
+    // ========================================================
+    // STANDARD PDF
+    // ========================================================
+
+    // --------------------------------------------------------
+    // 1. FIND OR CREATE STANDARD
+    // --------------------------------------------------------
+
+    let standardId:
+      | string
+      | null =
+      null;
+
+    const {
+      data:
+        existingStandard,
+      error:
+        standardFindError,
+    } =
+      await supabaseAdmin
+        .from(
+          "standards"
+        )
+        .select(
+          "id, title, status"
+        )
+        .eq(
+          "user_id",
+          user.id
+        )
+        .eq(
+          "is_number",
+          isNumber
+        )
+        .eq(
+          "edition_year",
+          editionYear
+        )
+        .maybeSingle();
+
+    if (
+      standardFindError
+    ) {
+      throw standardFindError;
+    }
+
+    if (
+      existingStandard
+    ) {
+      standardId =
+        existingStandard.id;
+
+      // ------------------------------------------------------
+      // Do not silently reactivate a superseded/withdrawn
+      // standard just because a user uploads another copy.
+      // ------------------------------------------------------
+
+      if (
+        existingStandard.status !==
+        "active"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              `This standard already exists with status "${existingStandard.status}". Review the existing standard before uploading another edition.`,
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+    } else {
+      const {
+        data:
+          newStandard,
+        error:
+          createStandardError,
+      } =
+        await supabaseAdmin
+          .from(
+            "standards"
+          )
+          .insert([
+            {
+              is_number:
+                isNumber,
+
+              title,
+
+              edition_year:
+                editionYear,
+
+              status:
+                "active",
+
+              source:
+                "manual_upload",
+
+              source_url:
+                null,
+
+              user_id:
+                user.id,
+            },
+          ])
+          .select(
+            "id"
+          )
+          .single();
+
+      if (
+        createStandardError
+      ) {
+        throw createStandardError;
+      }
+
+      standardId =
+        newStandard.id;
+    }
+
+    // --------------------------------------------------------
+    // 2. CREATE DOCUMENT RECORD
+    // --------------------------------------------------------
+
+    const {
+      data:
+        standardDocument,
+      error:
+        documentCreateError,
+    } =
+      await supabaseAdmin
+        .from(
+          "standard_documents"
+        )
+        .insert([
+          {
+            standard_id:
+              standardId,
+
+            filename:
+              file.name,
+
+            document_hash:
+              documentHash,
+
+            page_count:
+              null,
+
+            uploaded_at:
+              new Date().toISOString(),
+
+            user_id:
+              user.id,
+          },
+        ])
+        .select(
+          "id"
+        )
+        .single();
+
+    if (
+      documentCreateError
+    ) {
+      if (
+        documentCreateError.code ===
+        "23505"
+      ) {
+        return NextResponse.json(
+          {
+            success: true,
+            duplicate:
+              true,
+            uploadType:
+              "standard",
+            filename:
+              file.name,
+            documentHash,
+            message:
+              "This IS Standard PDF is already in your standards library.",
+          },
+          {
+            status: 200,
+          }
+        );
+      }
+
+      throw documentCreateError;
+    }
+
+    // --------------------------------------------------------
+    // 3. CHUNK STANDARD TEXT
+    // --------------------------------------------------------
+    //
+    // This is intentionally a transitional chunker.
+    // It preserves page/metadata architecture first.
+    //
+    // Clause/table/figure parsing will be improved in the
+    // next ingestion stage after this upload route is verified.
+    // --------------------------------------------------------
+
+    const standardChunks: Array<{
+      content: string;
+      chunk_index: number;
+      page_number: number | null;
+      clause_no: string | null;
+      sub_clause_no: string | null;
+      table_no: string | null;
+      figure_no: string | null;
+      annex_no: string | null;
+      section_title: string | null;
+    }> = [];
+
+    const basicChunks =
+      [];
 
     for (
       let i = 0;
-      i < cleanText.length;
+      i <
+      cleanFullText.length;
       i += 1000
     ) {
       const chunk =
-        cleanText.substring(
+        cleanFullText.substring(
           i,
           i + 1000
         );
 
       if (
-        chunk.trim().length > 0
+        chunk.trim()
+          .length > 0
       ) {
-        chunks.push(
+        basicChunks.push(
           chunk.trim()
         );
       }
     }
 
-    if (
-      chunks.length === 0
+    for (
+      let index = 0;
+      index <
+      basicChunks.length;
+      index++
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "No readable text chunks were produced from the PDF.",
-        },
-        {
-          status: 400,
-        }
-      );
+      const content =
+        basicChunks[
+          index
+        ];
+
+      standardChunks.push({
+        content,
+
+        chunk_index:
+          index,
+
+        page_number:
+          null,
+
+        clause_no:
+          null,
+
+        sub_clause_no:
+          null,
+
+        table_no:
+          null,
+
+        figure_no:
+          null,
+
+        annex_no:
+          null,
+
+        section_title:
+          null,
+      });
     }
 
-    // ----------------------------------------------------------
-    // EMBEDDINGS
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // 4. EMBEDDINGS
+    // --------------------------------------------------------
 
     const {
       embeddings,
@@ -347,30 +913,39 @@ export async function POST(
             "gemini-embedding-2"
           ),
         values:
-          chunks,
+          standardChunks.map(
+            (chunk) =>
+              chunk.content
+          ),
       });
 
     if (
       embeddings.length !==
-      chunks.length
+      standardChunks.length
     ) {
       throw new Error(
-        `Embedding count mismatch. Expected ${chunks.length}, got ${embeddings.length}.`
+        `Embedding count mismatch. Expected ${standardChunks.length}, got ${embeddings.length}.`
       );
     }
 
-    // ----------------------------------------------------------
-    // PREPARE ROWS
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // 5. INSERT STANDARD CHUNKS
+    // --------------------------------------------------------
 
-    const rowsToInsert =
-      chunks.map(
+    const rows =
+      standardChunks.map(
         (
           chunk,
           index
         ) => ({
+          standard_id:
+            standardId,
+
+          standard_document_id:
+            standardDocument.id,
+
           content:
-            chunk,
+            chunk.content,
 
           embedding:
             embeddings[
@@ -380,93 +955,94 @@ export async function POST(
               768
             ),
 
-          metadata: {
-            filename:
-              file.name,
+          page_number:
+            chunk.page_number,
 
-            chunk_index:
-              index,
-          },
+          clause_no:
+            chunk.clause_no,
+
+          sub_clause_no:
+            chunk.sub_clause_no,
+
+          table_no:
+            chunk.table_no,
+
+          figure_no:
+            chunk.figure_no,
+
+          annex_no:
+            chunk.annex_no,
+
+          section_title:
+            chunk.section_title,
+
+          chunk_index:
+            chunk.chunk_index,
 
           user_id:
             user.id,
-
-          document_hash:
-            documentHash,
         })
       );
 
-    // ----------------------------------------------------------
-    // INSERT
-    // ----------------------------------------------------------
-
     const {
       error:
-        insertError,
+        chunkInsertError,
     } =
       await supabaseAdmin
         .from(
-          "engineering_documents"
+          "standard_chunks"
         )
         .insert(
-          rowsToInsert
+          rows
         );
 
     if (
-      insertError
+      chunkInsertError
     ) {
-      // --------------------------------------------------------
-      // RACE-CONDITION SAFETY
-      // --------------------------------------------------------
-      //
-      // Two simultaneous uploads of the same PDF could both
-      // pass the pre-check. The unique database index is our
-      // final protection.
-      // --------------------------------------------------------
-
-      if (
-        insertError.code ===
-        "23505"
-      ) {
-        return NextResponse.json(
-          {
-            success: true,
-            duplicate: true,
-            filename:
-              file.name,
-            documentHash,
-            message:
-              "This PDF was already uploaded.",
-          },
-          {
-            status: 200,
-          }
+      // Clean up the document row if chunk ingestion
+      // failed after the document record was created.
+      await supabaseAdmin
+        .from(
+          "standard_documents"
+        )
+        .delete()
+        .eq(
+          "id",
+          standardDocument.id
+        )
+        .eq(
+          "user_id",
+          user.id
         );
-      }
 
-      console.error(
-        "Supabase document insert error:",
-        insertError
-      );
-
-      throw insertError;
+      throw chunkInsertError;
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
     // SUCCESS
-    // ----------------------------------------------------------
+    // ========================================================
 
     return NextResponse.json(
       {
         success: true,
-        duplicate: false,
+        duplicate:
+          false,
+        uploadType:
+          "standard",
         filename:
           file.name,
         documentHash,
+        standard: {
+          id:
+            standardId,
+          isNumber,
+          title,
+          editionYear,
+        },
         chunks:
-          chunks.length,
+          standardChunks.length,
         message:
-          "PDF Memorized.",
+          "IS Standard added to your standards library.",
       },
       {
         status: 200,

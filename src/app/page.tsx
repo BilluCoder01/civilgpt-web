@@ -1,3 +1,8 @@
+Library
+/
+page-updated.tsx
+
+
 "use client";
 
 import {
@@ -34,6 +39,8 @@ type UploadStatus =
       message: string;
     }
   | null;
+
+type UploadType = "engineering" | "standard";
 
 // ------------------------------------------------------------
 // MESSAGE BUBBLE
@@ -426,6 +433,25 @@ export default function Chat() {
   const [uploadedPdfName, setUploadedPdfName] =
     useState<string | null>(null);
 
+  const [showUploadDialog, setShowUploadDialog] =
+    useState(false);
+
+  const [uploadType, setUploadType] =
+    useState<UploadType>("engineering");
+
+  const [standardIsNumber, setStandardIsNumber] =
+    useState("");
+
+  const [standardEditionYear, setStandardEditionYear] =
+    useState("");
+
+  const [standardTitle, setStandardTitle] =
+    useState("");
+
+  // Keeps the upload type stable while the native file picker is open.
+  const uploadTypeRef =
+    useRef<UploadType>("engineering");
+
   // Message ID currently displaying "Copied".
   const [copiedMessageId, setCopiedMessageId] =
     useState<string | null>(null);
@@ -740,97 +766,195 @@ export default function Chat() {
     };
 
   // ------------------------------------------------------------
-  // PDF UPLOAD
+  // UPLOAD DIALOG / PDF UPLOAD
   // ------------------------------------------------------------
 
-  const handleFileUpload =
-  async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file =
-      e.target.files?.[0];
-
-    if (!file) {
+  const openUploadDialog = () => {
+    if (isUploading || isLoading) {
       return;
     }
 
-    setIsUploading(true);
     setUploadStatus(null);
+    setShowUploadDialog(true);
+  };
 
-    const formData =
-      new FormData();
+  const chooseEngineeringPdf = () => {
+    uploadTypeRef.current = "engineering";
+    setUploadType("engineering");
+    setShowUploadDialog(false);
 
-    formData.append(
-      "file",
-      file
+    window.setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 0);
+  };
+
+  const chooseStandardPdf = () => {
+    const normalizedIsNumber =
+      standardIsNumber.trim();
+
+    const normalizedTitle =
+      standardTitle.trim();
+
+    const year = Number(
+      standardEditionYear
     );
 
-    try {
-      const res =
-        await fetch(
-          "/api/upload",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
-
-      const data =
-        await res.json();
-
-      if (!res.ok) {
-        throw new Error(
-          data?.error ||
-            "Failed to upload PDF."
-        );
-      }
-
-      setUploadedPdfName(
-        data.filename ||
-          file.name
-      );
-
-      if (
-        data.duplicate
-      ) {
-        setUploadStatus({
-          type: "success",
-          message:
-            "This PDF is already in your knowledge base.",
-        });
-      } else {
-        setUploadStatus({
-          type: "success",
-          message:
-            "PDF Memorized.",
-        });
-      }
-
-      setTimeout(() => {
-        setUploadStatus(null);
-      }, 3500);
-    } catch (error) {
-      console.error(
-        "PDF upload failed:",
-        error
-      );
-
+    if (!normalizedIsNumber) {
       setUploadStatus({
         type: "error",
-        message:
-          "Failed to read PDF.",
+        message: "Enter the IS Standard number first.",
       });
-    } finally {
-      setIsUploading(false);
+      return;
+    }
+
+    if (
+      !Number.isInteger(year) ||
+      year < 1900 ||
+      year > 2100
+    ) {
+      setUploadStatus({
+        type: "error",
+        message: "Enter a valid edition year.",
+      });
+      return;
+    }
+
+    if (!normalizedTitle) {
+      setUploadStatus({
+        type: "error",
+        message: "Enter the IS Standard title first.",
+      });
+      return;
+    }
+
+    uploadTypeRef.current = "standard";
+    setUploadType("standard");
+    setShowUploadDialog(false);
+
+    window.setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 0);
+  };
+
+  const handleFileUpload =
+    async (
+      e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      const file =
+        e.target.files?.[0];
+
+      if (!file) {
+        return;
+      }
+
+      const currentUploadType =
+        uploadTypeRef.current;
+
+      setIsUploading(true);
+      setUploadStatus(null);
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "file",
+        file
+      );
+
+      formData.append(
+        "uploadType",
+        currentUploadType
+      );
 
       if (
-        fileInputRef.current
+        currentUploadType === "standard"
       ) {
-        fileInputRef.current.value =
-          "";
+        formData.append(
+          "isNumber",
+          standardIsNumber.trim()
+        );
+
+        formData.append(
+          "editionYear",
+          standardEditionYear.trim()
+        );
+
+        formData.append(
+          "title",
+          standardTitle.trim()
+        );
       }
-    }
-  };
+
+      try {
+        const res =
+          await fetch(
+            "/api/upload",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+        const data =
+          await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            data?.error ||
+              "Failed to upload PDF."
+          );
+        }
+
+        setUploadedPdfName(
+          data.filename ||
+            file.name
+        );
+
+        if (data.duplicate) {
+          setUploadStatus({
+            type: "success",
+            message:
+              currentUploadType === "standard"
+                ? "This IS Standard PDF is already in your standards library."
+                : "This PDF is already in your knowledge base.",
+          });
+        } else {
+          setUploadStatus({
+            type: "success",
+            message:
+              currentUploadType === "standard"
+                ? "IS Standard added to your standards library."
+                : "PDF Memorized.",
+          });
+        }
+
+        setTimeout(() => {
+          setUploadStatus(null);
+        }, 3500);
+      } catch (error) {
+        console.error(
+          "PDF upload failed:",
+          error
+        );
+
+        setUploadStatus({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to process PDF.",
+        });
+      } finally {
+        setIsUploading(false);
+
+        if (
+          fileInputRef.current
+        ) {
+          fileInputRef.current.value =
+            "";
+        }
+      }
+    };
 
   // ------------------------------------------------------------
   // REMOVE PDF VISUAL CHIP
@@ -1778,6 +1902,237 @@ export default function Chat() {
               </div>
             </div>
 
+            {/* UPLOAD DIALOG */}
+
+            {showUploadDialog && (
+              <>
+                <div
+                  className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-[2px]"
+                  onClick={() =>
+                    setShowUploadDialog(false)
+                  }
+                />
+
+                <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
+                  <div
+                    className={`w-full max-w-md rounded-[28px] border shadow-2xl p-6 ${
+                      isDarkMode
+                        ? "bg-[#1e1f20] border-slate-700 text-slate-200"
+                        : "bg-white border-slate-200 text-slate-800"
+                    }`}
+                    onClick={(event) =>
+                      event.stopPropagation()
+                    }
+                  >
+                    <div className="flex items-start justify-between gap-4 mb-6">
+                      <div>
+                        <h3 className="text-lg font-semibold">
+                          Add PDF to CivilGPT
+                        </h3>
+                        <p
+                          className={`mt-1 text-[12px] ${
+                            isDarkMode
+                              ? "text-slate-500"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          Choose how this document should be indexed.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowUploadDialog(false)
+                        }
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          isDarkMode
+                            ? "text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+                            : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        }`}
+                        aria-label="Close upload dialog"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          className="w-4 h-4"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6 6l12 12M18 6 6 18"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUploadType("engineering")
+                        }
+                        className={`rounded-[20px] border p-4 text-left transition-all ${
+                          uploadType === "engineering"
+                            ? isDarkMode
+                              ? "border-amber-500/50 bg-amber-500/10"
+                              : "border-slate-400 bg-slate-50"
+                            : isDarkMode
+                            ? "border-slate-700 hover:border-slate-600"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="text-xl mb-2">📐</div>
+                        <p className="text-[13px] font-semibold">
+                          Engineering PDF
+                        </p>
+                        <p
+                          className={`mt-1 text-[11px] leading-relaxed ${
+                            isDarkMode
+                              ? "text-slate-500"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          Project reports, drawings, notes and other engineering documents.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUploadType("standard")
+                        }
+                        className={`rounded-[20px] border p-4 text-left transition-all ${
+                          uploadType === "standard"
+                            ? isDarkMode
+                              ? "border-amber-500/50 bg-amber-500/10"
+                              : "border-slate-400 bg-slate-50"
+                            : isDarkMode
+                            ? "border-slate-700 hover:border-slate-600"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="text-xl mb-2">📘</div>
+                        <p className="text-[13px] font-semibold">
+                          IS Standard / Code
+                        </p>
+                        <p
+                          className={`mt-1 text-[11px] leading-relaxed ${
+                            isDarkMode
+                              ? "text-slate-500"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          Store as citation-ready authoritative code material.
+                        </p>
+                      </button>
+                    </div>
+
+                    {uploadType === "standard" ? (
+                      <div className="space-y-4">
+                        <div>
+                          <label className={`block text-[12px] font-medium mb-1.5 ${
+                            isDarkMode
+                              ? "text-slate-300"
+                              : "text-slate-700"
+                          }`}>
+                            IS Number
+                          </label>
+
+                          <input
+                            value={standardIsNumber}
+                            onChange={(e) =>
+                              setStandardIsNumber(e.target.value)
+                            }
+                            placeholder="e.g. IS 10262"
+                            className={`w-full px-4 py-3 rounded-[16px] border outline-none text-[13px] ${
+                              isDarkMode
+                                ? "bg-[#131314] border-slate-700 text-slate-200 placeholder-slate-600 focus:border-slate-500"
+                                : "bg-[#f0f4f9] border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-slate-300"
+                            }`}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={`block text-[12px] font-medium mb-1.5 ${
+                            isDarkMode
+                              ? "text-slate-300"
+                              : "text-slate-700"
+                          }`}>
+                            Edition / Year
+                          </label>
+
+                          <input
+                            type="number"
+                            value={standardEditionYear}
+                            onChange={(e) =>
+                              setStandardEditionYear(e.target.value)
+                            }
+                            placeholder="e.g. 2019"
+                            className={`w-full px-4 py-3 rounded-[16px] border outline-none text-[13px] ${
+                              isDarkMode
+                                ? "bg-[#131314] border-slate-700 text-slate-200 placeholder-slate-600 focus:border-slate-500"
+                                : "bg-[#f0f4f9] border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-slate-300"
+                            }`}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={`block text-[12px] font-medium mb-1.5 ${
+                            isDarkMode
+                              ? "text-slate-300"
+                              : "text-slate-700"
+                          }`}>
+                            Standard Title
+                          </label>
+
+                          <input
+                            value={standardTitle}
+                            onChange={(e) =>
+                              setStandardTitle(e.target.value)
+                            }
+                            placeholder="e.g. Concrete Mix Proportioning — Guidelines"
+                            className={`w-full px-4 py-3 rounded-[16px] border outline-none text-[13px] ${
+                              isDarkMode
+                                ? "bg-[#131314] border-slate-700 text-slate-200 placeholder-slate-600 focus:border-slate-500"
+                                : "bg-[#f0f4f9] border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-slate-300"
+                            }`}
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={chooseStandardPdf}
+                          className={`w-full py-3.5 rounded-[20px] text-[13px] font-semibold transition-colors ${
+                            isDarkMode
+                              ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                              : "bg-slate-800 text-white hover:bg-slate-700"
+                          }`}
+                        >
+                          Choose IS Standard PDF
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={chooseEngineeringPdf}
+                        className={`w-full py-3.5 rounded-[20px] text-[13px] font-semibold transition-colors ${
+                          isDarkMode
+                            ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                            : "bg-slate-800 text-white hover:bg-slate-700"
+                        }`}
+                      >
+                        Choose Engineering PDF
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* COMPOSER */}
 
             <div
@@ -1947,9 +2302,7 @@ export default function Chat() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      fileInputRef.current?.click()
-                    }
+                    onClick={openUploadDialog}
                     disabled={
                       isUploading ||
                       isLoading
@@ -1961,8 +2314,8 @@ export default function Chat() {
                     }`}
                     title={
                       uploadedPdfName
-                        ? "Replace PDF"
-                        : "Upload IS Code PDF"
+                        ? "Add or replace PDF"
+                        : "Add PDF"
                     }
                   >
                     {isUploading ? (

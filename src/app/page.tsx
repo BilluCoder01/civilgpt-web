@@ -2425,8 +2425,7 @@ export default function Chat() {
               <div className="max-w-3xl mx-auto w-full">
                 {/* STANDARD EMBEDDING CONTROL */}
 
-                {standardDocumentId &&
-                  uploadType === "standard" && (
+                {(standardDocumentId || uploadType === "standard") && (
                     <div className="mb-3">
                       <div
                         className={`rounded-[18px] border px-4 py-3 shadow-sm ${

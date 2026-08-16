@@ -849,55 +849,158 @@ export default function Chat() {
       setIsUploading(true);
       setUploadStatus(null);
 
-      const formData =
-        new FormData();
-
-      formData.append(
-        "file",
-        file
-      );
-
-      formData.append(
-        "uploadType",
-        currentUploadType
-      );
-
-      if (
-        currentUploadType === "standard"
-      ) {
-        formData.append(
-          "isNumber",
-          standardIsNumber.trim()
-        );
-
-        formData.append(
-          "editionYear",
-          standardEditionYear.trim()
-        );
-
-        formData.append(
-          "title",
-          standardTitle.trim()
-        );
-      }
-
       try {
+        // ------------------------------------------------------
+        // AUTHENTICATED USER
+        // ------------------------------------------------------
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
+        if (!user) {
+          throw new Error(
+            "You must be signed in to upload a PDF."
+          );
+        }
+
+        // ------------------------------------------------------
+        // PDF VALIDATION
+        // ------------------------------------------------------
+
+        const isPdf =
+          file.type ===
+            "application/pdf" ||
+          file.name
+            .toLowerCase()
+            .endsWith(".pdf");
+
+        if (!isPdf) {
+          throw new Error(
+            "Only PDF files are supported."
+          );
+        }
+
+        // ------------------------------------------------------
+        // DIRECT SUPABASE STORAGE UPLOAD
+        // ------------------------------------------------------
+        //
+        // IMPORTANT:
+        // The PDF is uploaded directly from the browser to
+        // Supabase Storage. It never travels through Vercel's
+        // /api/upload request body, avoiding FUNCTION_PAYLOAD_TOO_LARGE.
+        //
+        // Storage path format:
+        // <user-id>/<random-id>-<safe-filename>.pdf
+        //
+        // The Storage RLS policy only allows the authenticated
+        // user to insert into the first-level folder matching
+        // their own user ID.
+        // ------------------------------------------------------
+
+        const safeFilename = file.name
+          .trim()
+          .replace(/[^a-zA-Z0-9._-]+/g, "-")
+          .replace(/-+/g, "-");
+
+        const storagePath =
+          `${user.id}/${crypto.randomUUID()}-${safeFilename || "document.pdf"}`;
+
+        const {
+          error: storageUploadError,
+        } = await supabase.storage
+          .from("civilgpt-pdfs")
+          .upload(
+            storagePath,
+            file,
+            {
+              contentType:
+                "application/pdf",
+              upsert: false,
+            }
+          );
+
+        if (storageUploadError) {
+          throw new Error(
+            `Storage upload failed: ${storageUploadError.message}`
+          );
+        }
+
+        // ------------------------------------------------------
+        // SERVER-SIDE PROCESSING
+        // ------------------------------------------------------
+        //
+        // Only a small JSON payload is now sent to /api/upload.
+        // The server downloads the PDF from private Storage.
+        // ------------------------------------------------------
+
+        const payload: {
+          storagePath: string;
+          filename: string;
+          uploadType: UploadType;
+          isNumber?: string;
+          editionYear?: string;
+          title?: string;
+        } = {
+          storagePath,
+          filename: file.name,
+          uploadType: currentUploadType,
+        };
+
+        if (
+          currentUploadType ===
+          "standard"
+        ) {
+          payload.isNumber =
+            standardIsNumber.trim();
+
+          payload.editionYear =
+            standardEditionYear.trim();
+
+          payload.title =
+            standardTitle.trim();
+        }
+
         const res =
           await fetch(
             "/api/upload",
             {
               method: "POST",
-              body: formData,
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify(
+                payload
+              ),
             }
           );
 
-        const data =
-          await res.json();
+        const responseText =
+          await res.text();
+
+        let data: any = null;
+
+        try {
+          data = responseText
+            ? JSON.parse(responseText)
+            : null;
+        } catch {
+          throw new Error(
+            responseText ||
+              `Upload request failed with status ${res.status}.`
+          );
+        }
 
         if (!res.ok) {
           throw new Error(
             data?.error ||
-              "Failed to upload PDF."
+              `Upload request failed with status ${res.status}.`
           );
         }
 
@@ -910,7 +1013,8 @@ export default function Chat() {
           setUploadStatus({
             type: "success",
             message:
-              currentUploadType === "standard"
+              currentUploadType ===
+              "standard"
                 ? "This IS Standard PDF is already in your standards library."
                 : "This PDF is already in your knowledge base.",
           });
@@ -918,15 +1022,16 @@ export default function Chat() {
           setUploadStatus({
             type: "success",
             message:
-              currentUploadType === "standard"
-                ? "IS Standard added to your standards library."
+              currentUploadType ===
+              "standard"
+                ? "IS Standard prepared for batch embedding."
                 : "PDF Memorized.",
           });
         }
 
         setTimeout(() => {
           setUploadStatus(null);
-        }, 3500);
+        }, 4500);
       } catch (error) {
         console.error(
           "PDF upload failed:",
@@ -949,75 +1054,6 @@ export default function Chat() {
           fileInputRef.current.value =
             "";
         }
-      }
-    };
-
-  // ------------------------------------------------------------
-  // TEMPORARY IS 10262 RECOVERY TEST
-  // ------------------------------------------------------------
-
-  const prepareExistingStandard =
-    async () => {
-      if (isUploading || isLoading) {
-        return;
-      }
-
-      setIsUploading(true);
-      setUploadStatus(null);
-
-      try {
-        const response =
-          await fetch(
-            "/api/standards/prepare-existing",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                standardId:
-                  "d239e0b7-bb9e-4b48-9de2-ae544c8fe6aa",
-                storagePath:
-                  "c54f9e53-0a42-426e-a31b-a4e88f11f62f/f1b492ed-a010-4bb4-9622-1f32ca5f2c16-is.10262.2009.pdf",
-              }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              "Failed to prepare IS 10262."
-          );
-        }
-
-        setUploadStatus({
-          type: "success",
-          message:
-            `IS 10262 prepared: ${
-              data.pageCount ?? "?"
-            } pages, ${
-              data.totalChunks ?? "?"
-            } chunks ready for batch embedding.`,
-        });
-      } catch (error) {
-        console.error(
-          "IS 10262 preparation failed:",
-          error
-        );
-
-        setUploadStatus({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to prepare IS 10262.",
-        });
-      } finally {
-        setIsUploading(false);
       }
     };
 
@@ -2208,30 +2244,6 @@ export default function Chat() {
               }`}
             >
               <div className="max-w-3xl mx-auto w-full">
-                {/* TEMPORARY IS 10262 RECOVERY TEST */}
-
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    onClick={
-                      prepareExistingStandard
-                    }
-                    disabled={
-                      isUploading ||
-                      isLoading
-                    }
-                    className={`px-4 py-2 rounded-xl text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isDarkMode
-                        ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
-                        : "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                    }`}
-                  >
-                    {isUploading
-                      ? "Preparing IS 10262…"
-                      : "Prepare existing IS 10262"}
-                  </button>
-                </div>
-
                 {/* PDF ATTACHMENT */}
 
                 {uploadedPdfName && (

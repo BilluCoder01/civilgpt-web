@@ -744,78 +744,93 @@ export default function Chat() {
   // ------------------------------------------------------------
 
   const handleFileUpload =
-    async (
-      e: React.ChangeEvent<HTMLInputElement>
-    ) => {
-      const file =
-        e.target.files?.[0];
+  async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file =
+      e.target.files?.[0];
 
-      if (!file) {
-        return;
-      }
+    if (!file) {
+      return;
+    }
 
-      setIsUploading(true);
-      setUploadStatus(null);
+    setIsUploading(true);
+    setUploadStatus(null);
 
-      const formData =
-        new FormData();
+    const formData =
+      new FormData();
 
-      formData.append(
-        "file",
-        file
-      );
+    formData.append(
+      "file",
+      file
+    );
 
-      try {
-        const res =
-          await fetch(
-            "/api/upload",
-            {
-              method: "POST",
-              body: formData,
-            }
-          );
-
-        if (!res.ok) {
-          throw new Error(
-            await res.text()
-          );
-        }
-
-        setUploadedPdfName(
-          file.name
+    try {
+      const res =
+        await fetch(
+          "/api/upload",
+          {
+            method: "POST",
+            body: formData,
+          }
         );
 
+      const data =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.error ||
+            "Failed to upload PDF."
+        );
+      }
+
+      setUploadedPdfName(
+        data.filename ||
+          file.name
+      );
+
+      if (
+        data.duplicate
+      ) {
+        setUploadStatus({
+          type: "success",
+          message:
+            "This PDF is already in your knowledge base.",
+        });
+      } else {
         setUploadStatus({
           type: "success",
           message:
             "PDF Memorized.",
         });
-
-        setTimeout(() => {
-          setUploadStatus(null);
-        }, 3000);
-      } catch (error) {
-        console.error(
-          "PDF upload failed:",
-          error
-        );
-
-        setUploadStatus({
-          type: "error",
-          message:
-            "Failed to read PDF.",
-        });
-      } finally {
-        setIsUploading(false);
-
-        if (
-          fileInputRef.current
-        ) {
-          fileInputRef.current.value =
-            "";
-        }
       }
-    };
+
+      setTimeout(() => {
+        setUploadStatus(null);
+      }, 3500);
+    } catch (error) {
+      console.error(
+        "PDF upload failed:",
+        error
+      );
+
+      setUploadStatus({
+        type: "error",
+        message:
+          "Failed to read PDF.",
+      });
+    } finally {
+      setIsUploading(false);
+
+      if (
+        fileInputRef.current
+      ) {
+        fileInputRef.current.value =
+          "";
+      }
+    }
+  };
 
   // ------------------------------------------------------------
   // REMOVE PDF VISUAL CHIP

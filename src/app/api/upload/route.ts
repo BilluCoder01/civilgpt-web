@@ -1,57 +1,48 @@
-import { NextResponse } from 'next/server';
-import { google } from '@ai-sdk/google';
-import { embedMany } from 'ai';
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { NextResponse } from "next/server";
+import { google } from "@ai-sdk/google";
+import { embedMany } from "ai";
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { createHash } from "crypto";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
 const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const supabaseAdmin = createClient(
   supabaseUrl,
   supabaseServiceKey
 );
 
-// ------------------------------------------------------------
+// ============================================================
 // PDF TEXT EXTRACTION
-// ------------------------------------------------------------
-// pdf-parse v2 requires the Node CanvasFactory to be supplied
-// in environments such as Next.js/Vercel to avoid the
-// "DOMMatrix is not defined" error.
-// ------------------------------------------------------------
+// ============================================================
 
 async function extractPdfText(
   buffer: Buffer
 ): Promise<string> {
-  const {
+  const { CanvasFactory } = await import(
+    "pdf-parse/worker"
+  );
+
+  const { PDFParse } = await import(
+    "pdf-parse"
+  );
+
+  const parser = new PDFParse({
+    data: buffer,
     CanvasFactory,
-  } = await import(
-    'pdf-parse/worker'
-  );
-
-  const {
-    PDFParse,
-  } = await import(
-    'pdf-parse'
-  );
-
-  const parser =
-    new PDFParse({
-      data: buffer,
-      CanvasFactory,
-    });
+  });
 
   try {
-    const result =
-      await parser.getText();
+    const result = await parser.getText();
 
     return result.text;
   } finally {
@@ -59,17 +50,29 @@ async function extractPdfText(
   }
 }
 
-// ------------------------------------------------------------
+// ============================================================
+// SHA-256 DOCUMENT HASH
+// ============================================================
+
+function getDocumentHash(
+  buffer: Buffer
+): string {
+  return createHash("sha256")
+    .update(buffer)
+    .digest("hex");
+}
+
+// ============================================================
 // POST
-// ------------------------------------------------------------
+// ============================================================
 
 export async function POST(
   req: Request
 ) {
   try {
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // AUTHENTICATION
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const cookieStore =
       await cookies();
@@ -97,8 +100,7 @@ export async function POST(
     if (!user) {
       return NextResponse.json(
         {
-          error:
-            'Unauthorized',
+          error: "Unauthorized",
         },
         {
           status: 401,
@@ -106,23 +108,23 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // FORM DATA
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const formData =
       await req.formData();
 
     const file =
       formData.get(
-        'file'
+        "file"
       ) as File | null;
 
     if (!file) {
       return NextResponse.json(
         {
           error:
-            'No file uploaded',
+            "No file uploaded",
         },
         {
           status: 400,
@@ -130,18 +132,22 @@ export async function POST(
       );
     }
 
-    // Basic file-type validation.
-    if (
-      file.type !==
-        'application/pdf' &&
-      !file.name
+    // ----------------------------------------------------------
+    // FILE TYPE VALIDATION
+    // ----------------------------------------------------------
+
+    const isPdf =
+      file.type ===
+        "application/pdf" ||
+      file.name
         .toLowerCase()
-        .endsWith('.pdf')
-    ) {
+        .endsWith(".pdf");
+
+    if (!isPdf) {
       return NextResponse.json(
         {
           error:
-            'Only PDF files are supported.',
+            "Only PDF files are supported.",
         },
         {
           status: 400,
@@ -149,9 +155,9 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // READ FILE
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const buffer =
       Buffer.from(
@@ -164,7 +170,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            'Uploaded PDF is empty.',
+            "Uploaded PDF is empty.",
         },
         {
           status: 400,
@@ -172,9 +178,90 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
+    // GENERATE CONTENT HASH
+    // ----------------------------------------------------------
+    //
+    // This identifies the actual PDF bytes.
+    // Renaming the same PDF will still produce the same hash.
+    // ----------------------------------------------------------
+
+    const documentHash =
+      getDocumentHash(
+        buffer
+      );
+
+    // ----------------------------------------------------------
+    // DUPLICATE CHECK
+    // ----------------------------------------------------------
+    //
+    // We check before PDF parsing and embedding so duplicate
+    // files consume virtually no processing time.
+    //
+    // Service-role client is intentional here because this is
+    // a trusted server-side operation after authenticating
+    // the user above.
+    // ----------------------------------------------------------
+
+    const {
+      data: existingDocument,
+      error:
+        duplicateCheckError,
+    } =
+      await supabaseAdmin
+        .from(
+          "engineering_documents"
+        )
+        .select("id, metadata")
+        .eq(
+          "user_id",
+          user.id
+        )
+        .eq(
+          "document_hash",
+          documentHash
+        )
+        .limit(1)
+        .maybeSingle();
+
+    if (
+      duplicateCheckError
+    ) {
+      console.error(
+        "Duplicate check failed:",
+        duplicateCheckError
+      );
+
+      throw duplicateCheckError;
+    }
+
+    if (
+      existingDocument
+    ) {
+      const existingFilename =
+        existingDocument
+          .metadata?.filename ||
+        file.name;
+
+      return NextResponse.json(
+        {
+          success: true,
+          duplicate: true,
+          filename:
+            existingFilename,
+          documentHash,
+          message:
+            "This PDF is already in your engineering knowledge base.",
+        },
+        {
+          status: 200,
+        }
+      );
+    }
+
+    // ----------------------------------------------------------
     // EXTRACT TEXT
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const rawText =
       await extractPdfText(
@@ -185,11 +272,11 @@ export async function POST(
       rawText
         .replace(
           /\u0000/g,
-          ''
+          ""
         )
         .replace(
           /\s+/g,
-          ' '
+          " "
         )
         .trim();
 
@@ -199,7 +286,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            'No readable text was found in the PDF.',
+            "No readable text was found in the PDF.",
         },
         {
           status: 400,
@@ -207,9 +294,9 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // CHUNK TEXT
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const chunks: string[] = [];
 
@@ -239,7 +326,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            'No readable text chunks were produced from the PDF.',
+            "No readable text chunks were produced from the PDF.",
         },
         {
           status: 400,
@@ -247,13 +334,9 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
-    // GENERATE EMBEDDINGS
-    // --------------------------------------------------------
-    // Keep your existing model and 768-dimensional database
-    // schema for now. We are not changing your RAG architecture
-    // in this fix.
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
+    // EMBEDDINGS
+    // ----------------------------------------------------------
 
     const {
       embeddings,
@@ -261,7 +344,7 @@ export async function POST(
       await embedMany({
         model:
           google.textEmbeddingModel(
-            'gemini-embedding-2'
+            "gemini-embedding-2"
           ),
         values:
           chunks,
@@ -276,9 +359,9 @@ export async function POST(
       );
     }
 
-    // --------------------------------------------------------
-    // PREPARE DATABASE ROWS
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
+    // PREPARE ROWS
+    // ----------------------------------------------------------
 
     const rowsToInsert =
       chunks.map(
@@ -307,12 +390,15 @@ export async function POST(
 
           user_id:
             user.id,
+
+          document_hash:
+            documentHash,
         })
       );
 
-    // --------------------------------------------------------
-    // SAVE TO SUPABASE
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
+    // INSERT
+    // ----------------------------------------------------------
 
     const {
       error:
@@ -320,7 +406,7 @@ export async function POST(
     } =
       await supabaseAdmin
         .from(
-          'engineering_documents'
+          "engineering_documents"
         )
         .insert(
           rowsToInsert
@@ -329,25 +415,58 @@ export async function POST(
     if (
       insertError
     ) {
+      // --------------------------------------------------------
+      // RACE-CONDITION SAFETY
+      // --------------------------------------------------------
+      //
+      // Two simultaneous uploads of the same PDF could both
+      // pass the pre-check. The unique database index is our
+      // final protection.
+      // --------------------------------------------------------
+
+      if (
+        insertError.code ===
+        "23505"
+      ) {
+        return NextResponse.json(
+          {
+            success: true,
+            duplicate: true,
+            filename:
+              file.name,
+            documentHash,
+            message:
+              "This PDF was already uploaded.",
+          },
+          {
+            status: 200,
+          }
+        );
+      }
+
       console.error(
-        'Supabase document insert error:',
+        "Supabase document insert error:",
         insertError
       );
 
       throw insertError;
     }
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // SUCCESS
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     return NextResponse.json(
       {
         success: true,
+        duplicate: false,
         filename:
           file.name,
+        documentHash,
         chunks:
           chunks.length,
+        message:
+          "PDF Memorized.",
       },
       {
         status: 200,
@@ -357,17 +476,17 @@ export async function POST(
     error: any
   ) {
     console.error(
-      '\n❌ UPLOAD CRASH:',
+      "\n❌ UPLOAD CRASH:",
       error?.message ||
         error,
-      '\n'
+      "\n"
     );
 
     return NextResponse.json(
       {
         error:
           error?.message ||
-          'Failed to process PDF.',
+          "Failed to process PDF.",
       },
       {
         status: 500,

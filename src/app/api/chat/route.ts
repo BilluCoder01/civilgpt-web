@@ -76,23 +76,18 @@ function formatStandardCitation(
 ): string {
   const parts: string[] = [];
 
-  const standardName =
-    source.standard_number
-      ? source.edition_year
-        ? `${source.standard_number}:${source.edition_year}`
-        : source.standard_number
-      : null;
+  const standardName = source.edition_year
+    ? `${source.standard_number}:${source.edition_year}`
+    : source.standard_number;
 
   if (standardName) {
     parts.push(standardName);
   }
 
-  // Annex is part of the immutable source label when present.
   if (source.annex_no) {
     parts.push(`Annex ${source.annex_no}`);
   }
 
-  // Clause/sub-clause is used exactly as returned by the database.
   if (source.clause_no) {
     parts.push(
       source.sub_clause_no
@@ -116,16 +111,115 @@ function formatStandardCitation(
   return parts.join(" — ");
 }
 
-function buildImmutableSourceLabel(
-  source: StandardChunk,
-  index: number
-): string {
-  const sourceId = `STD-${index + 1}`;
-  const citation = formatStandardCitation(source);
+function isTableSource(
+  source: StandardChunk
+): boolean {
+  return (
+    source.table_no !== null &&
+    source.table_no.trim() !== ""
+  );
+}
 
-  return citation
-    ? `${sourceId} — ${citation}`
-    : `${sourceId} — No verified citation metadata`;
+function isDirectTableLookupQuestion(
+  question: string
+): boolean {
+  const q = question.toLowerCase();
+
+  return (
+    /\btable\s+\d+\b/.test(q) ||
+    /\bwhat does table\b/.test(q) ||
+    /\bmaximum water content\b/.test(q) ||
+    /\bwater content\b/.test(q) ||
+    /\bnominal maximum size\b/.test(q) ||
+    /\bstandard deviation\b.*\btable\b/.test(q)
+  );
+}
+
+function prioritizeStandardSources(
+  sources: StandardChunk[],
+  question: string
+): StandardChunk[] {
+  if (
+    !sources.length ||
+    !isDirectTableLookupQuestion(question)
+  ) {
+    return sources;
+  }
+
+  const tableSources =
+    sources.filter(isTableSource);
+
+  if (!tableSources.length) {
+    return sources;
+  }
+
+  return [
+    ...tableSources,
+    ...sources.filter(
+      (source) => !isTableSource(source)
+    ),
+  ];
+}
+
+function buildStandardContext(
+  sources: StandardChunk[]
+): {
+  context: string;
+  citationMap: Map<string, string>;
+} {
+  const citationMap =
+    new Map<string, string>();
+
+  const blocks = sources.map(
+    (source, index) => {
+      const sourceId =
+        `STD-${index + 1}`;
+
+      const citation =
+        formatStandardCitation(source);
+
+      citationMap.set(
+        sourceId,
+        citation
+      );
+
+      const role =
+        isTableSource(source)
+          ? "DIRECT TABLE SOURCE — PREFER FOR DIRECT TABLE/VALUE QUESTIONS"
+          : "GENERAL STANDARD SOURCE";
+
+      const metaLines = [
+        `Standard: ${source.standard_number || "Unknown"}`,
+        `Title: ${source.standard_title || "Unknown"}`,
+        `Edition Year: ${source.edition_year ?? "Unknown"}`,
+        `Status: ${source.standard_status || "Unknown"}`,
+        `Page: ${source.page_number ?? "Unknown"}`,
+        `Clause: ${source.clause_no ?? "Unknown"}`,
+        `Sub-clause: ${source.sub_clause_no ?? "Unknown"}`,
+        `Table: ${source.table_no ?? "Unknown"}`,
+        `Figure: ${source.figure_no ?? "Unknown"}`,
+        `Annex: ${source.annex_no ?? "Unknown"}`,
+        `Section Title: ${source.section_title ?? "Unknown"}`,
+        `Similarity: ${safeSimilarity(source.similarity)}`,
+      ];
+
+      return [
+        `[${sourceId}]`,
+        `SourceRole: ${role}`,
+        `VerifiedCitation: ${citation || "No verified citation metadata"}`,
+        metaLines.join(" | "),
+        "Content:",
+        source.content.trim(),
+      ].join("\n");
+    }
+  );
+
+  return {
+    context: blocks.join(
+      "\n\n--------------------------------\n\n"
+    ),
+    citationMap,
+  };
 }
 
 
@@ -138,96 +232,6 @@ function safeSimilarity(
     ? value.toFixed(4)
     : "unknown";
 }
-
-
-function isDirectTableLookupQuestion(
-  question: string
-): boolean {
-  const q = question.toLowerCase();
-
-  return (
-    /\btable\s+\d+\b/.test(q) ||
-    /\btable\b/.test(q) ||
-    /\bmaximum water content\b/.test(q) ||
-    /\bwater content\b/.test(q) ||
-    /\bnominal maximum size\b/.test(q)
-  );
-}
-
-function prioritizeStandardSources(
-  sources: StandardChunk[],
-  question: string
-): StandardChunk[] {
-  if (!sources.length || !isDirectTableLookupQuestion(question)) {
-    return sources;
-  }
-
-  const tableSources = sources.filter(
-    (source) => !!source.table_no
-  );
-
-  if (!tableSources.length) {
-    return sources;
-  }
-
-  return [
-    ...tableSources,
-    ...sources.filter((source) => !source.table_no),
-  ];
-}
-
-function buildStandardContext(
-  sources: StandardChunk[]
-): string {
-  return sources
-    .map((source, index) => {
-      const sourceId = `STD-${index + 1}`;
-      const immutableCitation =
-        buildImmutableSourceLabel(
-          source,
-          index
-        );
-
-      const sourceRole =
-        source.table_no
-          ? "DIRECT TABLE SOURCE — PREFER THIS SOURCE FOR TABLE VALUES"
-          : "GENERAL STANDARD SOURCE";
-
-      return `
-[${sourceId}]
-SOURCE TYPE: AUTHORITATIVE IS STANDARD
-SOURCE ROLE: ${sourceRole}
-
-IMMUTABLE CITATION LABEL:
-${immutableCitation}
-
-Standard: ${source.standard_number || "Unknown"}
-Title: ${source.standard_title || "Unknown"}
-Edition Year: ${source.edition_year ?? "Unknown"}
-Status: ${source.standard_status || "Unknown"}
-
-DATABASE METADATA:
-Page: ${source.page_number ?? "Unknown"}
-Clause: ${source.clause_no ?? "Unknown"}
-Sub-clause: ${source.sub_clause_no ?? "Unknown"}
-Table: ${source.table_no ?? "Unknown"}
-Figure: ${source.figure_no ?? "Unknown"}
-Annex: ${source.annex_no ?? "Unknown"}
-Section Title: ${source.section_title ?? "Unknown"}
-
-Similarity: ${safeSimilarity(
-  source.similarity
-)}
-
-CONTENT:
-${source.content}
-`.trim();
-    })
-    .join(
-      "\n\n--------------------------------\n\n"
-    );
-}
-
 
 function buildEngineeringContext(
   sources: EngineeringDocument[]
@@ -255,6 +259,152 @@ ${source.content}
       "\n\n--------------------------------\n\n"
     );
 }
+
+// ============================================================
+// DETERMINISTIC CITATION TOKEN REWRITE
+// ============================================================
+
+const CITATION_TOKEN_REGEX =
+  /\[\[CITE:(STD-\d+)\]\]/g;
+
+function replaceCitationTokens(
+  text: string,
+  citationMap: Map<string, string>
+): string {
+  return text.replace(
+    CITATION_TOKEN_REGEX,
+    (_match, sourceId: string) => {
+      const citation =
+        citationMap.get(sourceId);
+
+      return citation
+        ? `**Source: ${citation}**`
+        : "";
+    }
+  );
+}
+
+function createCitationRewriteStream(
+  citationMap: Map<string, string>
+): TransformStream<
+  Uint8Array,
+  Uint8Array
+> {
+  const decoder =
+    new TextDecoder();
+
+  const encoder =
+    new TextEncoder();
+
+  let pending = "";
+
+  const flushSafe = (
+    controller: TransformStreamDefaultController<Uint8Array>,
+    flushAll: boolean
+  ) => {
+    if (!pending) {
+      return;
+    }
+
+    if (!flushAll) {
+      const lastTokenStart =
+        pending.lastIndexOf(
+          "[[CITE:"
+        );
+
+      if (lastTokenStart !== -1) {
+        const closing =
+          pending.indexOf(
+            "]]",
+            lastTokenStart
+          );
+
+        if (closing === -1) {
+          const safePrefix =
+            pending.slice(
+              0,
+              lastTokenStart
+            );
+
+          pending =
+            pending.slice(
+              lastTokenStart
+            );
+
+          if (safePrefix) {
+            controller.enqueue(
+              encoder.encode(
+                replaceCitationTokens(
+                  safePrefix,
+                  citationMap
+                )
+              )
+            );
+          }
+
+          return;
+        }
+      }
+    }
+
+    if (flushAll) {
+      // Remove an incomplete trailing citation token rather than exposing it.
+      pending =
+        pending.replace(
+          /\[\[CITE:[A-Za-z0-9_-]*$/,
+          ""
+        );
+    }
+
+    const rewritten =
+      replaceCitationTokens(
+        pending,
+        citationMap
+      );
+
+    pending = "";
+
+    if (rewritten) {
+      controller.enqueue(
+        encoder.encode(
+          rewritten
+        )
+      );
+    }
+  };
+
+  return new TransformStream<
+    Uint8Array,
+    Uint8Array
+  >({
+    transform(
+      chunk,
+      controller
+    ) {
+      pending +=
+        decoder.decode(
+          chunk,
+          { stream: true }
+        );
+
+      flushSafe(
+        controller,
+        false
+      );
+    },
+
+    flush(controller) {
+      pending +=
+        decoder.decode();
+
+      flushSafe(
+        controller,
+        true
+      );
+    },
+  });
+}
+
 
 // ============================================================
 // POST
@@ -504,12 +654,20 @@ export async function POST(
         latestContent
       );
 
-    const standardContext =
+    const {
+      context: standardContext,
+      citationMap,
+    } =
       hasStandards
         ? buildStandardContext(
             prioritizedStandardChunks
           )
-        : "No matching IS-code sources were retrieved.";
+        : {
+            context:
+              "No matching IS-code sources were retrieved.",
+            citationMap:
+              new Map<string, string>(),
+          };
 
     const engineeringContext =
       hasEngineeringDocuments
@@ -519,7 +677,7 @@ export async function POST(
         : "No matching engineering-document sources were retrieved.";
 
     // ========================================================
-    // CITATION RULES
+    // CITATION + SYSTEM PROMPT
     // ========================================================
 
     const citationInstruction =
@@ -527,53 +685,38 @@ export async function POST(
         ? `
 AUTHORITATIVE IS-CODE CITATION RULES
 
-You have retrieved authoritative IS-standard source blocks labelled [STD-1], [STD-2], etc.
+The retrieved IS-standard sources are labelled [STD-1], [STD-2], etc.
 
-EACH SOURCE HAS ONE IMMUTABLE CITATION LABEL.
+Do NOT write human-readable IS-code citations yourself.
 
-When a statement is supported by a source, cite THAT SOURCE'S IMMUTABLE CITATION LABEL exactly as written.
+When a statement is supported by a standard source, output ONLY its exact
+source token at the end of the supported statement:
 
-Example:
+[[CITE:STD-1]]
+[[CITE:STD-2]]
 
-Source block:
-[STD-2]
-IMMUTABLE CITATION LABEL:
-STD-2 — 10262:2009 — Table 2 — Page 8
+Strict rules:
 
-Then your answer must use:
-**Source: IS 10262:2009 — Table 2 — Page 8**
-
-STRICT RULES:
-
-1. Never construct a citation by combining metadata from different [STD-*] sources.
-2. Never move a clause, table, annex, figure, or page from one source onto another source.
-3. Never invent missing citation metadata.
-4. Never use a citation component that is not present in that source's IMMUTABLE CITATION LABEL.
-5. The content and the citation must come from the SAME [STD-*] source block.
-6. If the source has no verified citation metadata, do not fabricate one.
-7. If a second statement is supported by a different source, cite that source separately.
-8. For a table/value question, if a retrieved source is labelled "DIRECT TABLE SOURCE — PREFER THIS SOURCE FOR TABLE VALUES", use that source for the table value and cite that source.
-9. Do not cite an annex/example merely because it repeats a value that is already directly present in the authoritative table source.
-10. For an example calculation, cite the source whose CONTENT actually contains that example.
-10. Do not cite IS-code material from memory when the retrieved source does not support the claim.
-12. When there is any uncertainty, omit the citation rather than guessing.
-
-VISIBLE CITATION FORMAT:
-**Source: <copy the human-readable citation represented by the source's IMMUTABLE CITATION LABEL>**
-
-The source ID itself, such as STD-2, is internal and should not normally be shown to the user.
+1. The token MUST refer to the single source whose CONTENT supports the statement.
+2. Never combine metadata from different sources.
+3. Never invent clause, sub-clause, table, figure, annex, edition, or page information.
+4. Never output "Source: IS ..." yourself. The server inserts that text.
+5. For a direct table/value question, prefer a source labelled:
+   DIRECT TABLE SOURCE — PREFER FOR DIRECT TABLE/VALUE QUESTIONS
+   when that source's CONTENT contains the requested value.
+6. Do not cite an Annex/example merely because it repeats a value that is already
+   directly present in a retrieved table.
+7. If no retrieved standard source supports the code-specific statement,
+   say that the retrieved evidence is insufficient.
+8. Do not output bare [STD-1]. Always use [[CITE:STD-1]].
+9. Do not invent citation tokens that were not supplied.
 `
         : `
 IS-CODE CITATION RULE
 
-No IS-standard source was retrieved for this question.
-
+No IS-standard chunks were retrieved for this question.
 Do not fabricate an IS-code citation.
 `;
-
-    // ========================================================
-    // SYSTEM PROMPT
-    // ========================================================
 
     const systemPrompt = `
 You are CivilGPT, a professional civil and structural engineering AI assistant.
@@ -582,44 +725,45 @@ CORE BEHAVIOR
 
 1. Answer the user's actual question directly.
 2. Maintain continuity with the conversation.
-3. Distinguish clearly between:
-   - official code requirements,
-   - retrieved source content,
-   - calculations,
-   - assumptions,
-   - engineering judgement,
-   - recommendations.
-4. Never present an assumption or recommendation as a mandatory code requirement.
-5. Never fabricate a source or citation.
-6. For safety-critical structural or construction decisions, state important assumptions and recommend checking the applicable project-specific requirements.
+3. Distinguish official code requirements from calculations, assumptions,
+   engineering judgement, recommendations, and project-document content.
+4. Never present an assumption as an IS-code requirement.
+5. Never fabricate a citation.
+6. For safety-critical engineering decisions, clearly state important assumptions.
 
 SOURCE PRIORITY
 
-When retrieved IS-standard content is relevant to the question, use it as the primary authority for code-specific statements.
+When relevant IS-standard material has been retrieved, use that material as
+the primary authority for code-specific statements.
 
-User engineering/project documents may be useful for project-specific context, but they are NOT automatically authoritative code material.
+User engineering/project documents may provide project context but are not
+automatically official code requirements.
+
+${citationInstruction}
+
+RETRIEVED IS-STANDARD CONTEXT:
 
 ${
-  citationInstruction
+  hasStandards
+    ? standardContext
+    : "No matching IS-code sources were retrieved."
 }
 
-RETRIEVED AUTHORITATIVE IS-STANDARD SOURCES
+RETRIEVED ENGINEERING-DOCUMENT CONTEXT:
 
-${standardContext}
+${
+  hasEngineeringDocuments
+    ? engineeringContext
+    : "No matching engineering-document sources were retrieved."
+}
 
-RETRIEVED USER ENGINEERING-DOCUMENT SOURCES
+IMPORTANT SOURCE-BINDING CHECK
 
-${engineeringContext}
-
-IMPORTANT:
-Answer from the retrieved evidence when the question is code-specific.
-If the evidence is insufficient, say so instead of guessing.
-
-SOURCE-BINDING CHECK:
-Before producing any IS-code citation, identify the single [STD-*] block
-whose CONTENT supports the statement. Then use only that block's
-IMMUTABLE CITATION LABEL. Never merge fields from multiple sources.
+Before emitting a citation token, identify the ONE [STD-*] source whose
+CONTENT supports the statement. Emit only that source's token.
+Never borrow citation metadata from another source.
 `.trim();
+
 
     // ========================================================
     // STREAM RESPONSE
@@ -663,7 +807,10 @@ IMMUTABLE CITATION LABEL. Never merge fields from multiple sources.
                       role:
                         "assistant",
                       content:
-                        text,
+                        replaceCitationTokens(
+                          text,
+                          citationMap
+                        ),
                     },
                   ]);
 
@@ -751,7 +898,38 @@ IMMUTABLE CITATION LABEL. Never merge fields from multiple sources.
     // RESPONSE
     // ========================================================
 
-    return result.toTextStreamResponse();
+    const rawResponse =
+      result.toTextStreamResponse();
+
+    if (!rawResponse.body) {
+      return rawResponse;
+    }
+
+    const rewrittenBody =
+      rawResponse.body.pipeThrough(
+        createCitationRewriteStream(
+          citationMap
+        )
+      );
+
+    const headers =
+      new Headers(
+        rawResponse.headers
+      );
+
+    headers.set(
+      "Content-Type",
+      "text/plain; charset=utf-8"
+    );
+
+    return new Response(
+      rewrittenBody,
+      {
+        status:
+          rawResponse.status,
+        headers,
+      }
+    );
   } catch (
     error: any
   ) {

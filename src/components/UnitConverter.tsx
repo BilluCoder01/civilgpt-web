@@ -58,8 +58,22 @@ const unitData: Record<UnitCategory, { base: string; rates: Record<string, numbe
   },
   'Temperature': {
     base: '°C',
-    rates: { '°C': 1, '°F': 1, 'K': 1 } // Rates ignored for temp; handled by custom formula
+    rates: { '°C': 1, '°F': 1, 'K': 1 }
   }
+};
+
+const categoryIcons: Record<UnitCategory, string> = {
+  'Force': '🏋️',
+  'Stress / Pressure': '🗜️',
+  'Length': '📏',
+  'Area': '📐',
+  'Volume': '🧊',
+  'Mass': '⚖️',
+  'Density / Unit Wt': '🧱',
+  'Bending Moment': '🔄',
+  'Moment of Inertia': '💫',
+  'Section Modulus': '🏗️',
+  'Temperature': '🌡️'
 };
 
 export default function UnitConverter({ isDark }: { isDark: boolean }) {
@@ -69,14 +83,12 @@ export default function UnitConverter({ isDark }: { isDark: boolean }) {
   const [inputValue, setInputValue] = useState<string>("1");
   const [outputValue, setOutputValue] = useState<string>("");
 
-  // Update available units when category changes
   useEffect(() => {
     const units = Object.keys(unitData[category].rates);
     setFromUnit(units[0]);
     setToUnit(units[1]);
   }, [category]);
 
-  // Calculate conversion
   useEffect(() => {
     const val = parseFloat(inputValue);
     if (isNaN(val)) {
@@ -84,7 +96,6 @@ export default function UnitConverter({ isDark }: { isDark: boolean }) {
       return;
     }
 
-    // Special handling for Temperature (requires offset formulas, not just multipliers)
     if (category === 'Temperature') {
       let inCelsius = val;
       if (fromUnit === '°F') inCelsius = (val - 32) * (5 / 9);
@@ -98,7 +109,6 @@ export default function UnitConverter({ isDark }: { isDark: boolean }) {
       return;
     }
 
-    // Standard multiplier handling for all other structural units
     const rates = unitData[category].rates;
     const inBase = val / rates[fromUnit];
     const outVal = inBase * rates[toUnit];
@@ -121,42 +131,50 @@ export default function UnitConverter({ isDark }: { isDark: boolean }) {
             <p className={`mt-2 text-[15px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Quick conversions for structural properties and loads.</p>
           </div>
 
-          {/* Category Selector */}
-          <div className="mb-10 flex flex-wrap gap-2.5">
+          {/* Sleek Category Selector */}
+          <div className="mb-10 flex flex-wrap gap-3">
             {(Object.keys(unitData) as UnitCategory[]).map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className={`px-4 py-2.5 rounded-full text-[13px] font-medium transition-colors border ${
+                className={`px-4 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all duration-200 flex items-center gap-2 border ${
                   category === cat
-                    ? (isDark ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-800 text-white border-slate-800')
-                    : (isDark ? 'bg-[#131314] text-slate-400 border-slate-800 hover:bg-[#333537]' : 'bg-[#f0f4f9] text-slate-600 border-transparent hover:bg-slate-200')
+                    ? (isDark 
+                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]' 
+                        : 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105')
+                    : (isDark 
+                        ? 'bg-[#131314] text-slate-400 border-slate-800 hover:bg-[#2a2b2d] hover:text-slate-300' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300')
                 }`}
               >
+                <span className="text-base">{categoryIcons[cat]}</span>
                 {cat}
               </button>
             ))}
           </div>
 
-          {/* Conversion Interface */}
-          <div className={`p-8 rounded-[28px] border ${isDark ? 'bg-[#131314] border-slate-800' : 'bg-[#f0f4f9] border-transparent'}`}>
-            <div className="flex flex-col md:flex-row items-center gap-6">
+          {/* Elevated Conversion Interface */}
+          <div className={`p-8 rounded-[32px] border relative overflow-hidden ${isDark ? 'bg-[#131314] border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+            
+            {/* Subtle Background Glow */}
+            <div className={`absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full blur-3xl opacity-20 pointer-events-none ${isDark ? 'bg-amber-500/20' : 'bg-amber-400/30'}`}></div>
+
+            <div className="flex flex-col md:flex-row items-center gap-4 relative z-10">
               
-              {/* FROM Input */}
-              <div className="flex-1 w-full space-y-3">
-                <label className={`block text-[12px] font-medium uppercase tracking-wider pl-1 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>From</label>
-                <div className={`flex items-center rounded-[20px] border transition-colors ${isDark ? 'bg-[#1e1f20] border-slate-700 focus-within:border-slate-500' : 'bg-white border-slate-200 focus-within:border-slate-400'}`}>
+              {/* FROM Card */}
+              <div className={`flex-1 w-full p-6 rounded-[24px] border transition-colors shadow-sm ${isDark ? 'bg-[#1a1b1e] border-slate-700/60 focus-within:border-slate-500' : 'bg-white border-slate-200 focus-within:border-slate-400'}`}>
+                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>From</label>
+                <div className="flex items-center justify-between gap-4">
                   <input 
                     type="number" 
                     value={inputValue} 
                     onChange={(e) => setInputValue(e.target.value)}
-                    className={`w-full p-4.5 bg-transparent outline-none text-xl font-medium pl-5 ${isDark ? 'text-white' : 'text-slate-800'}`}
+                    className={`w-full bg-transparent outline-none text-3xl md:text-4xl font-semibold truncate ${isDark ? 'text-white' : 'text-slate-800'}`}
                   />
-                  <div className={`w-px h-8 ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
                   <select 
                     value={fromUnit} 
                     onChange={(e) => setFromUnit(e.target.value)}
-                    className={`p-4.5 bg-transparent outline-none text-[15px] font-semibold cursor-pointer pr-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
+                    className={`py-2 px-3 rounded-xl outline-none text-[15px] font-semibold cursor-pointer appearance-none text-center min-w-[80px] transition-colors ${isDark ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                   >
                     {Object.keys(unitData[category].rates).map(unit => (
                       <option key={unit} value={unit} className={isDark ? 'bg-slate-800' : ''}>{unit}</option>
@@ -165,10 +183,10 @@ export default function UnitConverter({ isDark }: { isDark: boolean }) {
                 </div>
               </div>
 
-              {/* Swap Button */}
+              {/* Minimal Swap Button */}
               <button 
                 onClick={handleSwap}
-                className={`p-4 rounded-full shrink-0 transition-all duration-300 mt-6 md:mt-8 hover:scale-110 active:scale-95 ${isDark ? 'bg-[#333537] text-amber-400 hover:text-amber-300 shadow-lg' : 'bg-white border border-slate-200 text-amber-600 hover:bg-slate-50 shadow-sm'}`}
+                className={`w-12 h-12 rounded-full shrink-0 flex items-center justify-center transition-all duration-300 hover:rotate-180 active:scale-95 ${isDark ? 'bg-[#333537] text-amber-400 hover:text-amber-300 shadow-md' : 'bg-white border border-slate-200 text-amber-600 hover:bg-slate-50 shadow-md'}`}
                 title="Swap units"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
@@ -176,21 +194,20 @@ export default function UnitConverter({ isDark }: { isDark: boolean }) {
                 </svg>
               </button>
 
-              {/* TO Input (Read-only) */}
-              <div className="flex-1 w-full space-y-3">
-                <label className={`block text-[12px] font-medium uppercase tracking-wider pl-1 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>To</label>
-                <div className={`flex items-center rounded-[20px] border transition-colors ${isDark ? 'bg-[#1e1f20] border-slate-700' : 'bg-white border-slate-200'}`}>
+              {/* TO Card (Read-only) */}
+              <div className={`flex-1 w-full p-6 rounded-[24px] border transition-colors shadow-sm ${isDark ? 'bg-[#1a1b1e] border-slate-700/60' : 'bg-white border-slate-200'}`}>
+                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>To</label>
+                <div className="flex items-center justify-between gap-4">
                   <input 
                     type="text" 
                     readOnly 
                     value={outputValue} 
-                    className={`w-full p-4.5 bg-transparent outline-none text-xl font-bold pl-5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                    className={`w-full bg-transparent outline-none text-3xl md:text-4xl font-bold truncate ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                   />
-                  <div className={`w-px h-8 ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
                   <select 
                     value={toUnit} 
                     onChange={(e) => setToUnit(e.target.value)}
-                    className={`p-4.5 bg-transparent outline-none text-[15px] font-semibold cursor-pointer pr-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
+                    className={`py-2 px-3 rounded-xl outline-none text-[15px] font-semibold cursor-pointer appearance-none text-center min-w-[80px] transition-colors ${isDark ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                   >
                     {Object.keys(unitData[category].rates).map(unit => (
                       <option key={unit} value={unit} className={isDark ? 'bg-slate-800' : ''}>{unit}</option>

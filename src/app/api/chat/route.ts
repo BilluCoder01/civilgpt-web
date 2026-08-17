@@ -139,6 +139,43 @@ function safeSimilarity(
     : "unknown";
 }
 
+
+function isDirectTableLookupQuestion(
+  question: string
+): boolean {
+  const q = question.toLowerCase();
+
+  return (
+    /\btable\s+\d+\b/.test(q) ||
+    /\btable\b/.test(q) ||
+    /\bmaximum water content\b/.test(q) ||
+    /\bwater content\b/.test(q) ||
+    /\bnominal maximum size\b/.test(q)
+  );
+}
+
+function prioritizeStandardSources(
+  sources: StandardChunk[],
+  question: string
+): StandardChunk[] {
+  if (!sources.length || !isDirectTableLookupQuestion(question)) {
+    return sources;
+  }
+
+  const tableSources = sources.filter(
+    (source) => !!source.table_no
+  );
+
+  if (!tableSources.length) {
+    return sources;
+  }
+
+  return [
+    ...tableSources,
+    ...sources.filter((source) => !source.table_no),
+  ];
+}
+
 function buildStandardContext(
   sources: StandardChunk[]
 ): string {
@@ -151,9 +188,15 @@ function buildStandardContext(
           index
         );
 
+      const sourceRole =
+        source.table_no
+          ? "DIRECT TABLE SOURCE — PREFER THIS SOURCE FOR TABLE VALUES"
+          : "GENERAL STANDARD SOURCE";
+
       return `
 [${sourceId}]
 SOURCE TYPE: AUTHORITATIVE IS STANDARD
+SOURCE ROLE: ${sourceRole}
 
 IMMUTABLE CITATION LABEL:
 ${immutableCitation}
@@ -455,10 +498,16 @@ export async function POST(
     const hasEngineeringDocuments =
       engineeringDocuments.length > 0;
 
+    const prioritizedStandardChunks =
+      prioritizeStandardSources(
+        standardChunks,
+        latestContent
+      );
+
     const standardContext =
       hasStandards
         ? buildStandardContext(
-            standardChunks
+            prioritizedStandardChunks
           )
         : "No matching IS-code sources were retrieved.";
 
@@ -503,10 +552,11 @@ STRICT RULES:
 5. The content and the citation must come from the SAME [STD-*] source block.
 6. If the source has no verified citation metadata, do not fabricate one.
 7. If a second statement is supported by a different source, cite that source separately.
-8. For table values, prefer the source whose CONTENT actually contains the table or table value.
-9. For an example calculation, cite the source whose CONTENT actually contains that example.
+8. For a table/value question, if a retrieved source is labelled "DIRECT TABLE SOURCE — PREFER THIS SOURCE FOR TABLE VALUES", use that source for the table value and cite that source.
+9. Do not cite an annex/example merely because it repeats a value that is already directly present in the authoritative table source.
+10. For an example calculation, cite the source whose CONTENT actually contains that example.
 10. Do not cite IS-code material from memory when the retrieved source does not support the claim.
-11. When there is any uncertainty, omit the citation rather than guessing.
+12. When there is any uncertainty, omit the citation rather than guessing.
 
 VISIBLE CITATION FORMAT:
 **Source: <copy the human-readable citation represented by the source's IMMUTABLE CITATION LABEL>**

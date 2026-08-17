@@ -15,6 +15,18 @@ const supabaseUrl =
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
+if (!supabaseUrl) {
+  throw new Error(
+    "NEXT_PUBLIC_SUPABASE_URL is not configured."
+  );
+}
+
+if (!supabaseServiceKey) {
+  throw new Error(
+    "SUPABASE_SERVICE_ROLE_KEY is not configured."
+  );
+}
+
 const supabaseAdmin = createClient(
   supabaseUrl,
   supabaseServiceKey
@@ -56,7 +68,7 @@ type StandardChunk = {
 };
 
 // ============================================================
-// SOURCE FORMATTER
+// HELPERS
 // ============================================================
 
 function formatStandardCitation(
@@ -64,50 +76,115 @@ function formatStandardCitation(
 ): string {
   const parts: string[] = [];
 
-  const standardName =
-    source.edition_year
-      ? `${source.standard_number}:${source.edition_year}`
-      : source.standard_number;
+  const standardName = source.edition_year
+    ? `${source.standard_number}:${source.edition_year}`
+    : source.standard_number;
 
-  parts.push(standardName);
-
-  if (source.clause_no) {
-    if (source.sub_clause_no) {
-      parts.push(
-        `Clause ${source.clause_no}.${source.sub_clause_no}`
-      );
-    } else {
-      parts.push(
-        `Clause ${source.clause_no}`
-      );
-    }
-  }
-
-  if (source.table_no) {
-    parts.push(
-      `Table ${source.table_no}`
-    );
-  }
-
-  if (source.figure_no) {
-    parts.push(
-      `Figure ${source.figure_no}`
-    );
+  if (standardName) {
+    parts.push(standardName);
   }
 
   if (source.annex_no) {
-    parts.push(
-      `Annex ${source.annex_no}`
-    );
+    parts.push(`Annex ${source.annex_no}`);
   }
 
-  if (source.page_number) {
-    parts.push(
-      `Page ${source.page_number}`
-    );
+  if (source.clause_no) {
+    const clause = source.sub_clause_no
+      ? `${source.clause_no}.${source.sub_clause_no}`
+      : source.clause_no;
+
+    parts.push(`Clause ${clause}`);
+  }
+
+  if (source.table_no) {
+    parts.push(`Table ${source.table_no}`);
+  }
+
+  if (source.figure_no) {
+    parts.push(`Figure ${source.figure_no}`);
+  }
+
+  if (source.page_number !== null) {
+    parts.push(`Page ${source.page_number}`);
   }
 
   return parts.join(" — ");
+}
+
+function safeSimilarity(
+  similarity: unknown
+): string {
+  const value = Number(similarity);
+
+  return Number.isFinite(value)
+    ? value.toFixed(4)
+    : "unknown";
+}
+
+function buildStandardContext(
+  sources: StandardChunk[]
+): string {
+  return sources
+    .map((source, index) => {
+      const sourceId = `STD-${index + 1}`;
+      const citation = formatStandardCitation(source);
+
+      return `
+[${sourceId}]
+SOURCE TYPE: AUTHORITATIVE IS STANDARD
+Standard: ${source.standard_number || "Unknown"}
+Title: ${source.standard_title || "Unknown"}
+Edition Year: ${source.edition_year ?? "Unknown"}
+Status: ${source.standard_status || "Unknown"}
+
+VERIFIED CITATION METADATA:
+Citation: ${citation || "No citation metadata available"}
+Page: ${source.page_number ?? "Unknown"}
+Clause: ${source.clause_no ?? "Unknown"}
+Sub-clause: ${source.sub_clause_no ?? "Unknown"}
+Table: ${source.table_no ?? "Unknown"}
+Figure: ${source.figure_no ?? "Unknown"}
+Annex: ${source.annex_no ?? "Unknown"}
+Section Title: ${source.section_title ?? "Unknown"}
+
+Similarity: ${safeSimilarity(
+  source.similarity
+)}
+
+CONTENT:
+${source.content}
+`.trim();
+    })
+    .join(
+      "\n\n--------------------------------\n\n"
+    );
+}
+
+function buildEngineeringContext(
+  sources: EngineeringDocument[]
+): string {
+  return sources
+    .map((source, index) => {
+      const sourceId = `ENG-${index + 1}`;
+      const filename =
+        source.metadata?.filename ||
+        "Engineering document";
+
+      return `
+[${sourceId}]
+SOURCE TYPE: USER ENGINEERING DOCUMENT
+Filename: ${filename}
+Similarity: ${safeSimilarity(
+  source.similarity
+)}
+
+CONTENT:
+${source.content}
+`.trim();
+    })
+    .join(
+      "\n\n--------------------------------\n\n"
+    );
 }
 
 // ============================================================
@@ -122,15 +199,12 @@ export async function POST(
     // AUTHENTICATION
     // ========================================================
 
-    const cookieStore =
-      await cookies();
+    const cookieStore = await cookies();
 
     const supabaseAuth =
       createServerClient(
-        process.env
-          .NEXT_PUBLIC_SUPABASE_URL!,
-        process.env
-          .NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
           cookies: {
             getAll() {
@@ -165,8 +239,7 @@ export async function POST(
 
     const {
       messages,
-      sessionId:
-        clientSessionId,
+      sessionId: clientSessionId,
     } = body;
 
     if (
@@ -175,8 +248,7 @@ export async function POST(
     ) {
       return NextResponse.json(
         {
-          error:
-            "No messages provided.",
+          error: "No messages provided.",
         },
         {
           status: 400,
@@ -185,21 +257,17 @@ export async function POST(
     }
 
     const latestMessage =
-      messages[
-        messages.length - 1
-      ];
+      messages[messages.length - 1];
 
     const latestContent =
-      typeof latestMessage?.content ===
-      "string"
+      typeof latestMessage?.content === "string"
         ? latestMessage.content.trim()
         : "";
 
     if (!latestContent) {
       return NextResponse.json(
         {
-          error:
-            "The latest message is empty.",
+          error: "The latest message is empty.",
         },
         {
           status: 400,
@@ -211,37 +279,23 @@ export async function POST(
     // SESSION
     // ========================================================
 
-    let sessionId =
-      clientSessionId;
-
-    // --------------------------------------------------------
-    // Fallback only if the frontend didn't send a session ID.
-    // --------------------------------------------------------
+    let sessionId = clientSessionId;
 
     if (!sessionId) {
       const {
         data: existingSessions,
-        error:
-          sessionLookupError,
+        error: sessionLookupError,
       } =
         await supabaseAdmin
           .from("chat_sessions")
           .select("id")
-          .eq(
-            "user_id",
-            user.id
-          )
-          .order(
-            "created_at",
-            {
-              ascending: false,
-            }
-          )
+          .eq("user_id", user.id)
+          .order("created_at", {
+            ascending: false,
+          })
           .limit(1);
 
-      if (
-        sessionLookupError
-      ) {
+      if (sessionLookupError) {
         throw sessionLookupError;
       }
 
@@ -254,32 +308,24 @@ export async function POST(
       } else {
         const {
           data: newSession,
-          error:
-            createSessionError,
+          error: createSessionError,
         } =
           await supabaseAdmin
-            .from(
-              "chat_sessions"
-            )
+            .from("chat_sessions")
             .insert([
               {
-                user_id:
-                  user.id,
-                title:
-                  "Engineering Workspace",
+                user_id: user.id,
+                title: "Engineering Workspace",
               },
             ])
             .select("id")
             .single();
 
-        if (
-          createSessionError
-        ) {
+        if (createSessionError) {
           throw createSessionError;
         }
 
-        sessionId =
-          newSession.id;
+        sessionId = newSession.id;
       }
     }
 
@@ -288,24 +334,19 @@ export async function POST(
     // ========================================================
 
     const {
-      error:
-        userMessageError,
+      error: userMessageError,
     } =
       await supabaseAdmin
         .from("messages")
         .insert([
           {
-            session_id:
-              sessionId,
+            session_id: sessionId,
             role: "user",
-            content:
-              latestContent,
+            content: latestContent,
           },
         ]);
 
-    if (
-      userMessageError
-    ) {
+    if (userMessageError) {
       throw userMessageError;
     }
 
@@ -313,35 +354,20 @@ export async function POST(
     // QUERY EMBEDDING
     // ========================================================
 
-    const {
-      embedding,
-    } =
+    const { embedding } =
       await embed({
         model:
           google.textEmbeddingModel(
             "gemini-embedding-2"
           ),
-        value:
-          latestContent,
+        value: latestContent,
       });
 
-    // Keep compatibility with your existing
-    // vector(768) database schema.
     const queryEmbedding =
-      embedding.slice(
-        0,
-        768
-      );
+      embedding.slice(0, 768);
 
     // ========================================================
     // PARALLEL RAG SEARCH
-    // ========================================================
-    //
-    // Search BOTH:
-    //
-    // 1. standards → authoritative IS-code material
-    // 2. engineering_documents → user's general/project PDFs
-    //
     // ========================================================
 
     const [
@@ -351,34 +377,20 @@ export async function POST(
       supabaseAdmin.rpc(
         "match_standard_chunks",
         {
-          query_embedding:
-            queryEmbedding,
-
-          match_threshold:
-            0.50,
-
-          match_count:
-            6,
-
-          p_user_id:
-            user.id,
+          query_embedding: queryEmbedding,
+          match_threshold: 0.50,
+          match_count: 6,
+          p_user_id: user.id,
         }
       ),
 
       supabaseAdmin.rpc(
         "match_engineering_codes",
         {
-          query_embedding:
-            queryEmbedding,
-
-          match_threshold:
-            0.50,
-
-          match_count:
-            5,
-
-          p_user_id:
-            user.id,
+          query_embedding: queryEmbedding,
+          match_threshold: 0.50,
+          match_count: 5,
+          p_user_id: user.id,
         }
       ),
     ]);
@@ -387,18 +399,14 @@ export async function POST(
     // ERROR HANDLING
     // ========================================================
 
-    if (
-      standardsResult.error
-    ) {
+    if (standardsResult.error) {
       console.error(
         "Standards RAG error:",
         standardsResult.error
       );
     }
 
-    if (
-      engineeringResult.error
-    ) {
+    if (engineeringResult.error) {
       console.error(
         "Engineering document RAG error:",
         engineeringResult.error
@@ -406,123 +414,80 @@ export async function POST(
     }
 
     const standardChunks =
-      (standardsResult.data ||
-        []) as StandardChunk[];
+      (standardsResult.data || []) as StandardChunk[];
 
     const engineeringDocuments =
-      (engineeringResult.data ||
-        []) as EngineeringDocument[];
+      (engineeringResult.data || []) as EngineeringDocument[];
 
     // ========================================================
-    // BUILD STANDARD CONTEXT
+    // CONTEXT
     // ========================================================
-
-    const standardContext =
-      standardChunks
-        .map(
-          (
-            source,
-            index
-          ) => {
-            const citation =
-              formatStandardCitation(
-                source
-              );
-
-            return `
-[STANDARD SOURCE ${index + 1}]
-Citation: ${citation}
-Standard Title: ${source.standard_title}
-Status: ${source.standard_status}
-Similarity: ${source.similarity.toFixed(
-              4
-            )}
-
-Content:
-${source.content}
-`.trim();
-          }
-        )
-        .join(
-          "\n\n--------------------------------\n\n"
-        );
-
-    // ========================================================
-    // BUILD GENERAL ENGINEERING CONTEXT
-    // ========================================================
-
-    const engineeringContext =
-      engineeringDocuments
-        .map(
-          (
-            document,
-            index
-          ) => {
-            const filename =
-              document.metadata
-                ?.filename ||
-              "Engineering document";
-
-            return `
-[ENGINEERING DOCUMENT ${index + 1}]
-Filename: ${filename}
-Similarity: ${document.similarity.toFixed(
-              4
-            )}
-
-Content:
-${document.content}
-`.trim();
-          }
-        )
-        .join(
-          "\n\n--------------------------------\n\n"
-        );
 
     const hasStandards =
-      standardChunks.length >
-      0;
+      standardChunks.length > 0;
 
     const hasEngineeringDocuments =
-      engineeringDocuments.length >
-      0;
+      engineeringDocuments.length > 0;
+
+    const standardContext =
+      hasStandards
+        ? buildStandardContext(
+            standardChunks
+          )
+        : "No matching IS-code sources were retrieved.";
+
+    const engineeringContext =
+      hasEngineeringDocuments
+        ? buildEngineeringContext(
+            engineeringDocuments
+          )
+        : "No matching engineering-document sources were retrieved.";
 
     // ========================================================
-    // SOURCE INSTRUCTIONS
+    // CITATION RULES
     // ========================================================
 
     const citationInstruction =
       hasStandards
         ? `
-AUTHORITATIVE SOURCE CITATION RULES:
+AUTHORITATIVE IS-CODE CITATION RULES
 
-You have retrieved material from the user's IS-code knowledge base.
+You have been given structured IS-standard sources labelled [STD-1], [STD-2], etc.
 
-When your answer uses a fact, requirement, limit, formula, table value, definition, or procedure from an IS standard:
+For every code-specific factual statement that materially depends on a retrieved standard source — including requirements, limits, formulas, definitions, procedures, table values, or prescribed methods — cite the supporting source immediately after that statement.
 
-1. State the answer clearly.
-2. Cite the exact standard source immediately after the relevant statement.
-3. Use the citation information supplied in [STANDARD SOURCE].
-4. Prefer this format:
+Use this visible format:
 
-   **Source: IS 10262:2019 — Clause 5.3 — Table 5 — Page 8**
+**Source: IS 10262:2009 — Clause 4.3 — Page 8**
 
-5. Do NOT invent a clause number, table number, figure number, annex number, or page number.
-6. If only a standard number is available, cite only the information that is actually available.
-7. Do not claim an IS-code source when the information came only from a general engineering document.
-8. If multiple standards were used, cite each relevant source separately.
-9. If the retrieved source metadata conflicts with your prior knowledge, prefer the retrieved source for the answer and clearly state the retrieved citation.
+or, when applicable:
 
-Do not create citations based on memory.
-Only cite source metadata actually supplied in the retrieved context.
+**Source: IS 10262:2009 — Annex A — A-6 — Page 10**
+
+Rules:
+
+1. Use ONLY citation metadata explicitly provided in the corresponding [STD-*] source.
+2. Never invent or infer a clause number.
+3. Never invent or infer a sub-clause number.
+4. Never invent or infer a table, figure, annex, or page number.
+5. If a metadata field is missing, omit it rather than guessing.
+6. The source title may be used for identification, but it does not replace missing citation metadata.
+7. Do not cite an engineering-project PDF as though it were an IS Standard.
+8. If multiple standard sources support different parts of the answer, cite them separately.
+9. If the retrieved standard sources do not support a requested claim, explicitly say that the retrieved material does not establish it.
+10. Do not use your pretrained memory to manufacture an IS-code citation.
+11. The [STD-*] source blocks are the authoritative source identifiers for this response.
+
+CITATION CONSISTENCY:
+The citation printed in the answer must correspond to the exact [STD-*] block whose content supports that statement.
 `
         : `
-IS-CODE CITATION RULE:
+IS-CODE CITATION RULE
 
-No IS-standard chunks were retrieved for this question.
+No IS-standard source was retrieved for this question.
 
 Do not fabricate an IS-code citation.
-If the answer is based on general engineering knowledge or the user's project documents, say so.
+Do not claim that a general engineering document or your pretrained knowledge is an official IS-code source.
 `;
 
     // ========================================================
@@ -530,52 +495,44 @@ If the answer is based on general engineering knowledge or the user's project do
     // ========================================================
 
     const systemPrompt = `
-You are CivilGPT, a professional structural and civil engineering AI assistant.
+You are CivilGPT, a professional civil and structural engineering AI assistant.
 
-Your job is to provide technically useful, careful, and traceable answers.
+CORE BEHAVIOR
 
-IMPORTANT BEHAVIOR:
+1. Answer the user's actual question directly.
+2. Maintain continuity with the conversation.
+3. Distinguish clearly between:
+   - official code requirements,
+   - retrieved source content,
+   - calculations,
+   - assumptions,
+   - engineering judgement,
+   - recommendations.
+4. Never present an assumption or recommendation as a mandatory code requirement.
+5. Never fabricate a source or citation.
+6. For safety-critical structural or construction decisions, state important assumptions and recommend checking the applicable project-specific requirements.
 
-1. Analyze the entire conversation history.
-2. Maintain continuity between consecutive messages in the same chat.
-3. Adapt explanations to the user's apparent level:
-   - Student/basic question → clear step-by-step explanation.
-   - Technical engineering question → precise professional explanation.
-4. Never pretend that an assumption is an IS-code requirement.
-5. Clearly distinguish:
-   - code requirement
-   - calculation
-   - engineering assumption
-   - trial value
-   - engineering recommendation
-6. For structural or construction safety matters, encourage verification against the applicable standard and project conditions.
-7. Do not invent source citations.
+SOURCE PRIORITY
 
-IS-CODE PRIORITY:
+When retrieved IS-standard content is relevant to the question, use it as the primary authority for code-specific statements.
 
-When relevant IS-code material has been retrieved, treat that retrieved standard material as the primary authority for code-specific statements.
-
-GENERAL ENGINEERING DOCUMENTS:
-
-The user may also have personal engineering/project documents. Use those when relevant, but do not present their contents as official IS-code requirements.
-
-${citationInstruction}
-
-RETRIEVED IS-CODE CONTEXT:
+User engineering/project documents may be useful for project-specific context, but they are NOT automatically authoritative code material.
 
 ${
-  hasStandards
-    ? standardContext
-    : "No matching IS-code clauses were retrieved."
+  citationInstruction
 }
 
-RETRIEVED GENERAL ENGINEERING DOCUMENT CONTEXT:
+RETRIEVED AUTHORITATIVE IS-STANDARD SOURCES
 
-${
-  hasEngineeringDocuments
-    ? engineeringContext
-    : "No matching general engineering document content was retrieved."
-}
+${standardContext}
+
+RETRIEVED USER ENGINEERING-DOCUMENT SOURCES
+
+${engineeringContext}
+
+IMPORTANT:
+Answer from the retrieved evidence when the question is code-specific.
+If the evidence is insufficient, say so instead of guessing.
 `.trim();
 
     // ========================================================
@@ -599,110 +556,98 @@ ${
             text,
           }) => {
             try {
+              if (!sessionId) {
+                return;
+              }
+
               // ------------------------------------------------
               // SAVE ASSISTANT MESSAGE
               // ------------------------------------------------
 
-              if (sessionId) {
-                const {
-                  error:
-                    assistantInsertError,
-                } =
-                  await supabaseAdmin
-                    .from(
-                      "messages"
-                    )
-                    .insert([
-                      {
-                        session_id:
-                          sessionId,
-                        role:
-                          "assistant",
-                        content:
-                          text,
-                      },
-                    ]);
+              const {
+                error:
+                  assistantInsertError,
+              } =
+                await supabaseAdmin
+                  .from("messages")
+                  .insert([
+                    {
+                      session_id:
+                        sessionId,
+                      role:
+                        "assistant",
+                      content:
+                        text,
+                    },
+                  ]);
 
-                if (
+              if (assistantInsertError) {
+                console.error(
+                  "Failed to save assistant message:",
                   assistantInsertError
-                ) {
-                  console.error(
-                    "Failed to save assistant message:",
-                    assistantInsertError
+                );
+
+                return;
+              }
+
+              // ------------------------------------------------
+              // UPDATE CHAT TITLE
+              // ------------------------------------------------
+
+              const {
+                count: msgCount,
+              } =
+                await supabaseAdmin
+                  .from("messages")
+                  .select(
+                    "*",
+                    {
+                      count: "exact",
+                      head: true,
+                    }
+                  )
+                  .eq(
+                    "session_id",
+                    sessionId
                   );
 
-                  return;
-                }
-
-                // ----------------------------------------------
-                // UPDATE CHAT TITLE
-                // ----------------------------------------------
+              if (
+                msgCount !== null &&
+                msgCount < 3
+              ) {
+                const shortTitle =
+                  latestContent.length > 25
+                    ? `${latestContent.substring(
+                        0,
+                        25
+                      )}...`
+                    : latestContent;
 
                 const {
-                  count:
-                    msgCount,
+                  error: titleError,
                 } =
                   await supabaseAdmin
                     .from(
-                      "messages"
+                      "chat_sessions"
                     )
-                    .select(
-                      "*",
-                      {
-                        count:
-                          "exact",
-                        head: true,
-                      }
+                    .update({
+                      title:
+                        shortTitle,
+                    })
+                    .eq(
+                      "id",
+                      sessionId
                     )
                     .eq(
-                      "session_id",
-                      sessionId
+                      "user_id",
+                      user.id
                     );
 
-                if (
-                  msgCount !==
-                    null &&
-                  msgCount <
-                    3
-                ) {
-                  const shortTitle =
-                    latestContent.length >
-                    25
-                      ? `${latestContent.substring(
-                          0,
-                          25
-                        )}...`
-                      : latestContent;
-
-                  const {
-                    error:
-                      titleError,
-                  } =
-                    await supabaseAdmin
-                      .from(
-                        "chat_sessions"
-                      )
-                      .update({
-                        title:
-                          shortTitle,
-                      })
-                      .eq(
-                        "id",
-                        sessionId
-                      )
-                      .eq(
-                        "user_id",
-                        user.id
-                      );
-
-                  if (
+                if (titleError) {
+                  console.error(
+                    "Failed to update chat title:",
                     titleError
-                  ) {
-                    console.error(
-                      "Failed to update chat title:",
-                      titleError
-                    );
-                  }
+                  );
                 }
               }
             } catch (
@@ -726,8 +671,7 @@ ${
   ) {
     console.error(
       "\n❌ CHAT CRASH:",
-      error?.message ||
-        error,
+      error?.message || error,
       "\n"
     );
 

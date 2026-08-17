@@ -5,26 +5,14 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-const supabaseAdmin =
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-type CitationState = {
-  clauseNo: string | null;
-  subClauseNo: string | null;
-  tableNo: string | null;
-  figureNo: string | null;
-  annexNo: string | null;
-  sectionTitle: string | null;
-};
-
-function normalizeWhitespace(
-  text: string
-): string {
+function normalizeWhitespace(text: string): string {
   return text
     .replace(/\u0000/g, "")
     .replace(/\r\n/g, "\n")
@@ -33,324 +21,104 @@ function normalizeWhitespace(
     .trim();
 }
 
-function splitClauseNumber(
-  fullClause: string
-) {
-  const parts =
-    fullClause
-      .split(".")
-      .map((part) =>
-        part.trim()
-      )
-      .filter(Boolean);
+function splitClauseNumber(fullClause: string) {
+  const parts = fullClause
+    .split(".")
+    .map((part) => part.trim())
+    .filter(Boolean);
 
   return {
-    clauseNo:
-      parts[0] || null,
+    clauseNo: parts[0] || null,
     subClauseNo:
-      parts.length > 1
-        ? parts.slice(1).join(".")
-        : null,
+      parts.length > 1 ? parts.slice(1).join(".") : null,
   };
 }
 
-/**
- * Conservative clause detection.
- *
- * The first token after the clause number is rejected when it
- * looks like OCR/unit/calculation content. This is deliberately
- * conservative: uncertain text receives no clause metadata.
- */
-function detectClauseHeading(
-  line: string
-): {
-  clause: string;
-  title: string;
-} | null {
-  const value =
-    line
-      .replace(/\s+/g, " ")
-      .trim();
+function detectClauseHeading(line: string) {
+  const value = line.replace(/\s+/g, " ").trim();
+  const match = value.match(/^(\d+(?:\.\d+){0,4})\s+(.+)$/);
+  if (!match) return null;
 
-  const match =
-    value.match(
-      /^(\d+(?:\.\d+){0,4})\s+(.+)$/
-    );
+  const clause = match[1].trim();
+  const title = match[2].trim();
+  if (!title || !/^[A-Za-z]/.test(title)) return null;
 
-  if (!match) {
-    return null;
-  }
+  const firstWord = title
+    .split(/\s+/)[0]
+    .replace(/[^A-Za-z%²³]/g, "")
+    .toLowerCase();
 
-  const clause =
-    match[1].trim();
+  const rejected = new Set([
+    "in", "mm", "cm", "m", "km", "kg", "g", "kn", "n",
+    "pa", "kpa", "mpa", "gpa", "hz", "v", "a", "s",
+    "sec", "min", "hr", "percent", "%", "i", "ii", "iii",
+    "iv", "v", "vi", "vii", "viii", "ix", "x",
+  ]);
 
-  const title =
-    match[2].trim();
-
-  if (!title) {
-    return null;
-  }
+  if (rejected.has(firstWord)) return null;
+  if (/^\d+(?:\.\d+)?\b/.test(title)) return null;
+  if (/[=×+−]/.test(title)) return null;
+  if (/^(?:at|from|to|of|using|with|per|for)\b/i.test(title)) return null;
 
   if (
-    !/^[A-Za-z]/.test(title)
+    /\b(?:kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³|kN\/m|kN\/m²)\b/i.test(title) &&
+    /(?:at|from|to|of|supports?|units?|span|length|load|reaction|moment|deflection)/i.test(title)
   ) {
     return null;
   }
 
-  const firstWord =
-    title
-      .split(/\s+/)[0]
-      .replace(
-        /[^A-Za-z%²³]/g,
-        ""
-      )
-      .toLowerCase();
-
-  const rejectedFirstWords =
-    new Set([
-      "in",
-      "mm",
-      "cm",
-      "m",
-      "km",
-      "kg",
-      "g",
-      "kn",
-      "n",
-      "pa",
-      "kpa",
-      "mpa",
-      "gpa",
-      "hz",
-      "v",
-      "a",
-      "s",
-      "sec",
-      "min",
-      "hr",
-      "percent",
-      "%",
-      "i",
-      "ii",
-      "iii",
-      "iv",
-      "v",
-      "vi",
-      "vii",
-      "viii",
-      "ix",
-      "x",
-    ]);
-
-  if (
-    rejectedFirstWords.has(
-      firstWord
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    /^\d+(?:\.\d+)?\b/.test(
-      title
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    /[=×+−]/.test(
-      title
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    /^\s*(?:at|from|to|of|using|with|per|for)\b/i.test(
-      title
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    /^\d+(?:\.\d+)?\s*(?:kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³|kN\/m|kN\/m²|%)/i.test(
-      `${clause} ${title}`
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    /\b(?:kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³|kN\/m|kN\/m²)\b/i.test(
-      title
-    ) &&
-    /(?:at|from|to|of|supports?|units?|span|length|load|reaction|moment|deflection)/i.test(
-      title
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    /^[a-zA-Z]{1,4}\s*[\)\],:]/.test(
-      title
-    )
-  ) {
-    return null;
-  }
-
-  return {
-    clause,
-    title,
-  };
+  return { clause, title };
 }
 
-function detectTableHeading(
-  line: string
-): string | null {
-  const match =
-    line
-      .trim()
-      .match(
-        /^table\s+([A-Za-z]?\d+(?:\.\d+)*)\b/i
-      );
-
-  return match
-    ? match[1]
-    : null;
+function detectTable(line: string): string | null {
+  const match = line.trim().match(/^table\s+([A-Za-z]?\d+(?:\.\d+)*)\b/i);
+  return match ? match[1] : null;
 }
 
-function detectFigureHeading(
-  line: string
-): string | null {
-  const match =
-    line
-      .trim()
-      .match(
-        /^(?:figure|fig\.)\s+([A-Za-z]?\d+(?:\.\d+)*)\b/i
-      );
-
-  return match
-    ? match[1]
-    : null;
+function detectFigure(line: string): string | null {
+  const match = line.trim().match(/^(?:figure|fig\.)\s+([A-Za-z]?\d+(?:\.\d+)*)\b/i);
+  return match ? match[1] : null;
 }
 
-function detectAnnexHeading(
-  line: string
-): string | null {
-  const value =
-    line
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const match =
-    value.match(
-      /^(?:annex)\s*[-:]?\s*([A-H])\b/i
-    );
-
-  return match
-    ? match[1].toUpperCase()
-    : null;
+function detectAnnex(line: string): string | null {
+  const value = line.replace(/\s+/g, " ").trim();
+  const match = value.match(/^(?:annex)\s*[-:]?\s*([A-H])\b/i);
+  return match ? match[1].toUpperCase() : null;
 }
 
-function detectAnnexSubheading(
-  line: string
-): string | null {
-  const value =
-    line
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const match =
-    value.match(
-      /^([A-H])-(\d+(?:\.\d+)?)\s+(.+)$/i
-    );
-
-  if (!match) {
-    return null;
-  }
-
-  return `${match[1].toUpperCase()}-${match[2]}`;
+function detectAnnexSubheading(line: string): string | null {
+  const value = line.replace(/\s+/g, " ").trim();
+  const match = value.match(/^([A-H])-([0-9]+(?:\.[0-9]+)?)\s+(.+)$/i);
+  return match ? `${match[1].toUpperCase()}-${match[2]}` : null;
 }
 
-function detectGenericHeading(
-  line: string
-): string | null {
-  const value =
-    line
-      .replace(/\s+/g, " ")
-      .trim();
-
-  if (
-    value.length < 3 ||
-    value.length > 160
-  ) {
-    return null;
-  }
-
-  if (
-    /^table\s+/i.test(value) ||
-    /^figure\s+/i.test(value) ||
-    /^fig\.\s+/i.test(value) ||
-    /^annex\b/i.test(value)
-  ) {
-    return null;
-  }
-
-  if (
-    /^(?:\d+(?:\.\d+){0,4})\s+/.test(
-      value
-    )
-  ) {
-    return null;
-  }
-
-  return value ===
-      value.toUpperCase() &&
-    /[A-Z]/.test(value)
-    ? value
-    : null;
+function detectGenericHeading(line: string): string | null {
+  const value = line.replace(/\s+/g, " ").trim();
+  if (value.length < 3 || value.length > 160) return null;
+  if (/^table\s+/i.test(value) || /^figure\s+/i.test(value) || /^fig\.\s+/i.test(value) || /^annex\b/i.test(value)) return null;
+  if (/^(?:\d+(?:\.\d+){0,4})\s+/.test(value)) return null;
+  return value === value.toUpperCase() && /[A-Z]/.test(value) ? value : null;
 }
 
-/**
- * Rebuild metadata only from the already-stored chunk text.
- *
- * IMPORTANT:
- * - content is never changed
- * - embedding is never changed
- * - no Gemini API is called
- */
-function inferCitationForChunk(
-  content: string,
-  previous: CitationState
-): CitationState {
-  const lines =
-    normalizeWhitespace(
-      content
-    )
-      .split("\n")
-      .map((line) =>
-        line.trim()
-      )
-      .filter(Boolean);
+function isObviousNumericFragment(content: string): boolean {
+  const text = normalizeWhitespace(content);
+  if (/^\d+(?:\.\d+)?\s*(?:percent|%|kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³)\b/i.test(text)) return true;
+  if (/^\d+(?:\.\d+)?\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\b/i.test(text)) return true;
+  if (/^[0-9I\s.=×+\-_/]+$/.test(text.slice(0, 120))) return true;
+  return false;
+}
 
-  let state: CitationState = {
-    ...previous,
-  };
+function inferMetadata(content: string) {
+  const lines = normalizeWhitespace(content)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-  for (
-    const line of lines
-  ) {
-    const annex =
-      detectAnnexHeading(
-        line
-      );
-
+  // Prefer explicit headings inside this chunk.
+  for (const line of lines) {
+    const annex = detectAnnex(line);
     if (annex) {
-      // Annexes are independent citation regions.
-      state = {
+      return {
         clauseNo: null,
         subClauseNo: null,
         tableNo: null,
@@ -358,337 +126,210 @@ function inferCitationForChunk(
         annexNo: annex,
         sectionTitle: `ANNEX ${annex}`,
       };
-
-      continue;
     }
 
-    const annexSubheading =
-      detectAnnexSubheading(
-        line
-      );
-
-    if (
-      annexSubheading &&
-      state.annexNo
-    ) {
-      state.sectionTitle =
-        annexSubheading;
-      continue;
+    const annexSub = detectAnnexSubheading(line);
+    if (annexSub) {
+      return {
+        clauseNo: null,
+        subClauseNo: null,
+        tableNo: null,
+        figureNo: null,
+        annexNo: annexSub.split("-")[0],
+        sectionTitle: annexSub,
+      };
     }
 
-    const clause =
-      detectClauseHeading(
-        line
-      );
-
+    const clause = detectClauseHeading(line);
     if (clause) {
-      const split =
-        splitClauseNumber(
-          clause.clause
-        );
-
-      state.clauseNo =
-        split.clauseNo;
-
-      state.subClauseNo =
-        split.subClauseNo;
-
-      state.tableNo = null;
-      state.figureNo = null;
-
-      state.sectionTitle =
-        clause.title;
-
-      continue;
+      const split = splitClauseNumber(clause.clause);
+      return {
+        clauseNo: split.clauseNo,
+        subClauseNo: split.subClauseNo,
+        tableNo: null,
+        figureNo: null,
+        annexNo: null,
+        sectionTitle: clause.title,
+      };
     }
 
-    const table =
-      detectTableHeading(
-        line
-      );
-
+    const table = detectTable(line);
     if (table) {
-      state.tableNo =
-        table;
-      state.figureNo =
-        null;
-      continue;
+      return {
+        clauseNo: null,
+        subClauseNo: null,
+        tableNo: table,
+        figureNo: null,
+        annexNo: null,
+        sectionTitle: null,
+      };
     }
 
-    const figure =
-      detectFigureHeading(
-        line
-      );
-
+    const figure = detectFigure(line);
     if (figure) {
-      state.figureNo =
-        figure;
-      state.tableNo =
-        null;
-      continue;
-    }
-
-    const genericHeading =
-      detectGenericHeading(
-        line
-      );
-
-    if (
-      genericHeading
-    ) {
-      state.sectionTitle =
-        genericHeading;
+      return {
+        clauseNo: null,
+        subClauseNo: null,
+        tableNo: null,
+        figureNo: figure,
+        annexNo: null,
+        sectionTitle: null,
+      };
     }
   }
 
-  return state;
+  const generic = lines.map(detectGenericHeading).find(Boolean) || null;
+
+  return {
+    clauseNo: null,
+    subClauseNo: null,
+    tableNo: null,
+    figureNo: null,
+    annexNo: null,
+    sectionTitle: generic,
+  };
 }
 
-export async function POST(
-  req: Request
-) {
+export async function POST(req: Request) {
   try {
-    const cookieStore =
-      await cookies();
-
-    const supabaseAuth =
-      createServerClient(
-        process.env
-          .NEXT_PUBLIC_SUPABASE_URL!,
-        process.env
-          .NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            getAll() {
-              return cookieStore.getAll();
-            },
+    const cookieStore = await cookies();
+    const supabaseAuth = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
           },
-        }
-      );
+        },
+      }
+    );
 
     const {
       data: { user },
-    } =
-      await supabaseAuth.auth.getUser();
+    } = await supabaseAuth.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        {
-          error:
-            "Unauthorized.",
-        },
-        {
-          status: 401,
-        }
-      );
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    const body =
-      await req.json();
-
-    const documentId =
-      body?.documentId;
+    const body = await req.json();
+    const documentId = body?.documentId;
+    const offset = Math.max(Number(body?.offset) || 0, 0);
+    const limit = Math.min(Math.max(Number(body?.limit) || 20, 1), 25);
 
     if (!documentId) {
-      return NextResponse.json(
-        {
-          error:
-            "documentId is required.",
-        },
-        {
-          status: 400,
-        }
-      );
+      return NextResponse.json({ error: "documentId is required." }, { status: 400 });
     }
 
-    const {
-      data: document,
-      error: documentError,
-    } =
-      await supabaseAdmin
-        .from(
-          "standard_documents"
-        )
-        .select(
-          "id, standard_id, filename, total_chunks"
-        )
-        .eq(
-          "id",
-          documentId
-        )
-        .eq(
-          "user_id",
-          user.id
-        )
-        .single();
+    const { data: document, error: documentError } = await supabaseAdmin
+      .from("standard_documents")
+      .select("id, filename, total_chunks")
+      .eq("id", documentId)
+      .eq("user_id", user.id)
+      .single();
 
-    if (documentError) {
-      throw documentError;
-    }
+    if (documentError) throw documentError;
 
-    const {
-      data: chunks,
-      error: chunkError,
-    } =
-      await supabaseAdmin
-        .from(
-          "standard_chunks"
-        )
-        .select(
-          `
-          id,
-          content,
-          clause_no,
-          sub_clause_no,
-          table_no,
-          figure_no,
-          annex_no,
-          section_title,
-          chunk_index
-          `
-        )
-        .eq(
-          "standard_document_id",
-          document.id
-        )
-        .eq(
-          "user_id",
-          user.id
-        )
-        .order(
-          "chunk_index",
-          {
-            ascending: true,
-          }
-        );
+    const { count: totalCount, error: totalError } = await supabaseAdmin
+      .from("standard_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("standard_document_id", document.id)
+      .eq("user_id", user.id);
 
-    if (chunkError) {
-      throw chunkError;
-    }
+    if (totalError) throw totalError;
+
+    const totalChunks = totalCount || document.total_chunks || 0;
+
+    const { data: chunks, error: chunkError } = await supabaseAdmin
+      .from("standard_chunks")
+      .select(
+        "id, content, clause_no, sub_clause_no, table_no, figure_no, annex_no, section_title, chunk_index"
+      )
+      .eq("standard_document_id", document.id)
+      .eq("user_id", user.id)
+      .order("chunk_index", { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    if (chunkError) throw chunkError;
 
     if (!chunks?.length) {
       return NextResponse.json({
         success: true,
         documentId,
+        totalChunks,
         updatedChunks: 0,
-        message:
-          "No chunks found to repair.",
+        nextOffset: offset,
+        complete: true,
+        embeddingsPreserved: true,
       });
     }
 
-    let state: CitationState = {
-      clauseNo: null,
-      subClauseNo: null,
-      tableNo: null,
-      figureNo: null,
-      annexNo: null,
-      sectionTitle: null,
-    };
-
     let updatedChunks = 0;
 
-    for (
-      const chunk of chunks
-    ) {
-      const inferred =
-        inferCitationForChunk(
-          chunk.content,
-          state
-        );
+    for (const chunk of chunks) {
+      const inferred = inferMetadata(chunk.content);
 
-      // A new clause clears any old table/figure context.
-      // A new annex clears main-clause context.
-      state = {
-        ...inferred,
-      };
+      // For chunks that are clearly numeric fragments, clear stale metadata.
+      const numericFragment = isObviousNumericFragment(chunk.content);
+      const next = numericFragment
+        ? {
+            clauseNo: null,
+            subClauseNo: null,
+            tableNo: chunk.table_no?.toString().match(/^\d+$/) ? chunk.table_no : null,
+            figureNo: null,
+            annexNo: null,
+            sectionTitle: null,
+          }
+        : inferred;
 
       const needsUpdate =
-        chunk.clause_no !==
-          inferred.clauseNo ||
-        chunk.sub_clause_no !==
-          inferred.subClauseNo ||
-        chunk.table_no !==
-          inferred.tableNo ||
-        chunk.figure_no !==
-          inferred.figureNo ||
-        chunk.annex_no !==
-          inferred.annexNo ||
-        chunk.section_title !==
-          inferred.sectionTitle;
+        chunk.clause_no !== next.clauseNo ||
+        chunk.sub_clause_no !== next.subClauseNo ||
+        chunk.table_no !== next.tableNo ||
+        chunk.figure_no !== next.figureNo ||
+        chunk.annex_no !== next.annexNo ||
+        chunk.section_title !== next.sectionTitle;
 
-      if (!needsUpdate) {
-        continue;
-      }
+      if (!needsUpdate) continue;
 
-      const {
-        error: updateError,
-      } =
-        await supabaseAdmin
-          .from(
-            "standard_chunks"
-          )
-          .update({
-            clause_no:
-              inferred.clauseNo,
-            sub_clause_no:
-              inferred.subClauseNo,
-            table_no:
-              inferred.tableNo,
-            figure_no:
-              inferred.figureNo,
-            annex_no:
-              inferred.annexNo,
-            section_title:
-              inferred.sectionTitle,
-          })
-          .eq(
-            "id",
-            chunk.id
-          )
-          .eq(
-            "standard_document_id",
-            document.id
-          )
-          .eq(
-            "user_id",
-            user.id
-          );
+      const { error: updateError } = await supabaseAdmin
+        .from("standard_chunks")
+        .update({
+          clause_no: next.clauseNo,
+          sub_clause_no: next.subClauseNo,
+          table_no: next.tableNo,
+          figure_no: next.figureNo,
+          annex_no: next.annexNo,
+          section_title: next.sectionTitle,
+        })
+        .eq("id", chunk.id)
+        .eq("standard_document_id", document.id)
+        .eq("user_id", user.id);
 
-      if (updateError) {
-        throw updateError;
-      }
-
+      if (updateError) throw updateError;
       updatedChunks++;
     }
 
+    const nextOffset = offset + chunks.length;
+    const complete = nextOffset >= totalChunks;
+
     return NextResponse.json({
       success: true,
-      documentId: document.id,
-      filename:
-        document.filename,
-      totalChunks:
-        chunks.length,
+      documentId,
+      filename: document.filename,
+      totalChunks,
+      processedThisBatch: chunks.length,
       updatedChunks,
-      embeddingsPreserved:
-        true,
-      message:
-        "Citation metadata repaired without changing chunk content or embeddings.",
+      nextOffset,
+      complete,
+      embeddingsPreserved: true,
     });
   } catch (error: any) {
-    console.error(
-      "STANDARD METADATA REPAIR ERROR:",
-      error
-    );
-
+    console.error("STANDARD METADATA REPAIR ERROR:", error);
     return NextResponse.json(
-      {
-        error:
-          error?.message ||
-          "Failed to repair standard citation metadata.",
-      },
-      {
-        status: 500,
-      }
+      { error: error?.message || "Failed to repair standard citation metadata." },
+      { status: 500 }
     );
   }
 }

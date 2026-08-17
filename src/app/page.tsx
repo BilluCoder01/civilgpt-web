@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -1270,51 +1269,82 @@ export default function Chat() {
       setUploadStatus(null);
 
       try {
-        const res =
-          await fetch(
-            "/api/standards/repair-metadata",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                documentId:
-                  standardDocumentId ||
-                  "89ba6142-899d-408c-829b-f9634e2af7d2",
-              }),
-            }
-          );
+        const documentId =
+          standardDocumentId ||
+          "89ba6142-899d-408c-829b-f9634e2af7d2";
 
-        const responseText =
-          await res.text();
+        let offset = 0;
+        let repaired = 0;
+        let total = 0;
+        let finished = false;
 
-        let data: any = null;
+        while (!finished) {
+          const res =
+            await fetch(
+              "/api/standards/repair-metadata",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+                body: JSON.stringify({
+                  documentId,
+                  offset,
+                  limit: 20,
+                }),
+              }
+            );
 
-        try {
-          data = responseText
-            ? JSON.parse(responseText)
-            : null;
-        } catch {
-          throw new Error(
-            responseText ||
-              `Metadata repair failed with status ${res.status}.`
-          );
+          const responseText =
+            await res.text();
+
+          let data: any = null;
+
+          try {
+            data = responseText
+              ? JSON.parse(responseText)
+              : null;
+          } catch {
+            throw new Error(
+              responseText ||
+                `Metadata repair failed with status ${res.status}.`
+            );
+          }
+
+          if (!res.ok) {
+            throw new Error(
+              data?.error ||
+                `Metadata repair failed with status ${res.status}.`
+            );
+          }
+
+          repaired +=
+            Number(data?.updatedChunks) || 0;
+          total =
+            Number(data?.totalChunks) || total;
+          offset =
+            Number(data?.nextOffset) || 0;
+          finished =
+            Boolean(data?.complete);
+
+          setUploadStatus({
+            type: "success",
+            message:
+              finished
+                ? `Citation metadata repaired — ${repaired} chunks updated. Embeddings were preserved.`
+                : `Repairing citations — processed ${Math.min(
+                    offset,
+                    total || offset
+                  )}/${total || "…"} chunks…`,
+          });
+
+          if (!finished) {
+            await new Promise((resolve) =>
+              window.setTimeout(resolve, 100)
+            );
+          }
         }
-
-        if (!res.ok) {
-          throw new Error(
-            data?.error ||
-              `Metadata repair failed with status ${res.status}.`
-          );
-        }
-
-        setUploadStatus({
-          type: "success",
-          message:
-            `Citation metadata repaired — ${data.updatedChunks} chunks updated. Embeddings were preserved.`,
-        });
       } catch (error) {
         console.error(
           "Standard metadata repair failed:",

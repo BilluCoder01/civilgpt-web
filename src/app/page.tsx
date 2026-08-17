@@ -1,4 +1,4 @@
-"use client";
+""use client";
 
 import {
   useRef,
@@ -15,6 +15,7 @@ import "katex/dist/katex.min.css";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import MixDesignCalculator from "@/components/MixDesignCalculator";
+import UnitConverter from "@/components/UnitConverter";
 
 type Message = {
   id: string;
@@ -389,7 +390,7 @@ export default function Chat() {
 
   const [activeTab, setActiveTab] =
     useState<
-      "chat" | "calculator"
+      "chat" | "calculator" | "converter"
     >("chat");
 
   const [isSidebarOpen, setIsSidebarOpen] =
@@ -1661,6 +1662,65 @@ export default function Chat() {
               </div>
             )}
           </div>
+
+          <div className="relative group w-full flex justify-center md:justify-start">
+            <button
+              onClick={() => {
+                setActiveTab(
+                  "converter"
+                );
+
+                if (
+                  window.innerWidth <
+                  768
+                ) {
+                  setIsSidebarOpen(
+                    false
+                  );
+                }
+              }}
+              className={`flex items-center rounded-full transition-colors ${
+                activeTab ===
+                "converter"
+                  ? isDarkMode
+                    ? "bg-[#333537] text-slate-100 font-medium"
+                    : "bg-[#dce0e3] text-slate-900 font-medium"
+                  : isDarkMode
+                  ? "text-slate-300 hover:bg-[#333537]"
+                  : "text-slate-700 hover:bg-[#e8eaed]"
+              } ${
+                isSidebarOpen
+                  ? "w-full py-2 px-3"
+                  : "h-[40px] w-[40px] justify-center px-0"
+              }`}
+            >
+              <span className="w-5 flex justify-center text-slate-400 shrink-0 text-sm">
+                📐
+              </span>
+
+              <span
+                className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
+                  isSidebarOpen
+                    ? "ml-3 opacity-100 max-w-[200px]"
+                    : "w-0 opacity-0 ml-0 max-w-0"
+                }`}
+              >
+                Unit Converter
+              </span>
+            </button>
+
+            {!isSidebarOpen && (
+              <div
+                className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
+                  isDarkMode
+                    ? "bg-slate-700 text-white"
+                    : "bg-slate-800 text-white"
+                }`}
+              >
+                Unit Converter
+              </div>
+            )}
+          </div>
         </div>
 
         {/* HISTORY */}
@@ -2575,6 +2635,14 @@ export default function Chat() {
               isDarkMode
             }
           />
+        )}
+
+        {/* -------------------------------------------------- */}
+        {/* UNIT CONVERTER */}
+        {/* -------------------------------------------------- */}
+
+        {activeTab === "converter" && (
+          <UnitConverter isDark={isDarkMode} />
         )}
       </main>
     </div>

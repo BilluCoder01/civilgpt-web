@@ -76,24 +76,29 @@ function formatStandardCitation(
 ): string {
   const parts: string[] = [];
 
-  const standardName = source.edition_year
-    ? `${source.standard_number}:${source.edition_year}`
-    : source.standard_number;
+  const standardName =
+    source.standard_number
+      ? source.edition_year
+        ? `${source.standard_number}:${source.edition_year}`
+        : source.standard_number
+      : null;
 
   if (standardName) {
     parts.push(standardName);
   }
 
+  // Annex is part of the immutable source label when present.
   if (source.annex_no) {
     parts.push(`Annex ${source.annex_no}`);
   }
 
+  // Clause/sub-clause is used exactly as returned by the database.
   if (source.clause_no) {
-    const clause = source.sub_clause_no
-      ? `${source.clause_no}.${source.sub_clause_no}`
-      : source.clause_no;
-
-    parts.push(`Clause ${clause}`);
+    parts.push(
+      source.sub_clause_no
+        ? `Clause ${source.clause_no}.${source.sub_clause_no}`
+        : `Clause ${source.clause_no}`
+    );
   }
 
   if (source.table_no) {
@@ -111,6 +116,19 @@ function formatStandardCitation(
   return parts.join(" — ");
 }
 
+function buildImmutableSourceLabel(
+  source: StandardChunk,
+  index: number
+): string {
+  const sourceId = `STD-${index + 1}`;
+  const citation = formatStandardCitation(source);
+
+  return citation
+    ? `${sourceId} — ${citation}`
+    : `${sourceId} — No verified citation metadata`;
+}
+
+
 function safeSimilarity(
   similarity: unknown
 ): string {
@@ -127,18 +145,25 @@ function buildStandardContext(
   return sources
     .map((source, index) => {
       const sourceId = `STD-${index + 1}`;
-      const citation = formatStandardCitation(source);
+      const immutableCitation =
+        buildImmutableSourceLabel(
+          source,
+          index
+        );
 
       return `
 [${sourceId}]
 SOURCE TYPE: AUTHORITATIVE IS STANDARD
+
+IMMUTABLE CITATION LABEL:
+${immutableCitation}
+
 Standard: ${source.standard_number || "Unknown"}
 Title: ${source.standard_title || "Unknown"}
 Edition Year: ${source.edition_year ?? "Unknown"}
 Status: ${source.standard_status || "Unknown"}
 
-VERIFIED CITATION METADATA:
-Citation: ${citation || "No citation metadata available"}
+DATABASE METADATA:
 Page: ${source.page_number ?? "Unknown"}
 Clause: ${source.clause_no ?? "Unknown"}
 Sub-clause: ${source.sub_clause_no ?? "Unknown"}
@@ -159,6 +184,7 @@ ${source.content}
       "\n\n--------------------------------\n\n"
     );
 }
+
 
 function buildEngineeringContext(
   sources: EngineeringDocument[]
@@ -452,34 +478,40 @@ export async function POST(
         ? `
 AUTHORITATIVE IS-CODE CITATION RULES
 
-You have been given structured IS-standard sources labelled [STD-1], [STD-2], etc.
+You have retrieved authoritative IS-standard source blocks labelled [STD-1], [STD-2], etc.
 
-For every code-specific factual statement that materially depends on a retrieved standard source — including requirements, limits, formulas, definitions, procedures, table values, or prescribed methods — cite the supporting source immediately after that statement.
+EACH SOURCE HAS ONE IMMUTABLE CITATION LABEL.
 
-Use this visible format:
+When a statement is supported by a source, cite THAT SOURCE'S IMMUTABLE CITATION LABEL exactly as written.
 
-**Source: IS 10262:2009 — Clause 4.3 — Page 8**
+Example:
 
-or, when applicable:
+Source block:
+[STD-2]
+IMMUTABLE CITATION LABEL:
+STD-2 — 10262:2009 — Table 2 — Page 8
 
-**Source: IS 10262:2009 — Annex A — A-6 — Page 10**
+Then your answer must use:
+**Source: IS 10262:2009 — Table 2 — Page 8**
 
-Rules:
+STRICT RULES:
 
-1. Use ONLY citation metadata explicitly provided in the corresponding [STD-*] source.
-2. Never invent or infer a clause number.
-3. Never invent or infer a sub-clause number.
-4. Never invent or infer a table, figure, annex, or page number.
-5. If a metadata field is missing, omit it rather than guessing.
-6. The source title may be used for identification, but it does not replace missing citation metadata.
-7. Do not cite an engineering-project PDF as though it were an IS Standard.
-8. If multiple standard sources support different parts of the answer, cite them separately.
-9. If the retrieved standard sources do not support a requested claim, explicitly say that the retrieved material does not establish it.
-10. Do not use your pretrained memory to manufacture an IS-code citation.
-11. The [STD-*] source blocks are the authoritative source identifiers for this response.
+1. Never construct a citation by combining metadata from different [STD-*] sources.
+2. Never move a clause, table, annex, figure, or page from one source onto another source.
+3. Never invent missing citation metadata.
+4. Never use a citation component that is not present in that source's IMMUTABLE CITATION LABEL.
+5. The content and the citation must come from the SAME [STD-*] source block.
+6. If the source has no verified citation metadata, do not fabricate one.
+7. If a second statement is supported by a different source, cite that source separately.
+8. For table values, prefer the source whose CONTENT actually contains the table or table value.
+9. For an example calculation, cite the source whose CONTENT actually contains that example.
+10. Do not cite IS-code material from memory when the retrieved source does not support the claim.
+11. When there is any uncertainty, omit the citation rather than guessing.
 
-CITATION CONSISTENCY:
-The citation printed in the answer must correspond to the exact [STD-*] block whose content supports that statement.
+VISIBLE CITATION FORMAT:
+**Source: <copy the human-readable citation represented by the source's IMMUTABLE CITATION LABEL>**
+
+The source ID itself, such as STD-2, is internal and should not normally be shown to the user.
 `
         : `
 IS-CODE CITATION RULE
@@ -487,7 +519,6 @@ IS-CODE CITATION RULE
 No IS-standard source was retrieved for this question.
 
 Do not fabricate an IS-code citation.
-Do not claim that a general engineering document or your pretrained knowledge is an official IS-code source.
 `;
 
     // ========================================================
@@ -533,6 +564,11 @@ ${engineeringContext}
 IMPORTANT:
 Answer from the retrieved evidence when the question is code-specific.
 If the evidence is insufficient, say so instead of guessing.
+
+SOURCE-BINDING CHECK:
+Before producing any IS-code citation, identify the single [STD-*] block
+whose CONTENT supports the statement. Then use only that block's
+IMMUTABLE CITATION LABEL. Never merge fields from multiple sources.
 `.trim();
 
     // ========================================================

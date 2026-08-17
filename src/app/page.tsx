@@ -1278,6 +1278,15 @@ export default function Chat() {
         let total = 0;
         let finished = false;
 
+        let priorState = {
+          clauseNo: null as string | null,
+          subClauseNo: null as string | null,
+          tableNo: null as string | null,
+          figureNo: null as string | null,
+          annexNo: null as string | null,
+          sectionTitle: null as string | null,
+        };
+
         while (!finished) {
           const res =
             await fetch(
@@ -1292,6 +1301,7 @@ export default function Chat() {
                   documentId,
                   offset,
                   limit: 20,
+                  priorState,
                 }),
               }
             );
@@ -1327,6 +1337,23 @@ export default function Chat() {
             Number(data?.nextOffset) || 0;
           finished =
             Boolean(data?.complete);
+
+          if (data?.nextState) {
+            priorState = {
+              clauseNo:
+                data.nextState.clauseNo ?? null,
+              subClauseNo:
+                data.nextState.subClauseNo ?? null,
+              tableNo:
+                data.nextState.tableNo ?? null,
+              figureNo:
+                data.nextState.figureNo ?? null,
+              annexNo:
+                data.nextState.annexNo ?? null,
+              sectionTitle:
+                data.nextState.sectionTitle ?? null,
+            };
+          }
 
           setUploadStatus({
             type: "success",

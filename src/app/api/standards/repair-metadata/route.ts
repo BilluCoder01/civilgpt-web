@@ -173,8 +173,15 @@ function detectAnnex(line: string): string | null {
 
 function detectAnnexSubheading(line: string): string | null {
   const value = line.replace(/\s+/g, " ").trim();
-  const match = value.match(/^([A-H])-([0-9]+(?:\.[0-9]+)?)\s+(.+)$/i);
-  return match ? `${match[1].toUpperCase()}-${match[2]}` : null;
+
+  // Accept OCR variants such as A-4, A·4 and A.4.
+  const match = value.match(
+    /^([A-H])\s*[-·.]\s*([0-9]+(?:\.[0-9]+)?)\s+(.+)$/i
+  );
+
+  return match
+    ? `${match[1].toUpperCase()}-${match[2]}`
+    : null;
 }
 
 function detectGenericHeading(line: string): string | null {
@@ -221,17 +228,29 @@ function isObviousNumericFragment(content: string): boolean {
   return false;
 }
 
-function inferMetadata(content: string) {
+function inferMetadata(
+  content: string,
+  previous: {
+    clauseNo: string | null;
+    subClauseNo: string | null;
+    tableNo: string | null;
+    figureNo: string | null;
+    annexNo: string | null;
+    sectionTitle: string | null;
+  }
+) {
   const lines = normalizeWhitespace(content)
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  // Prefer explicit headings inside this chunk.
+  let state = { ...previous };
+
   for (const line of lines) {
     const annex = detectAnnex(line);
+
     if (annex) {
-      return {
+      state = {
         clauseNo: null,
         subClauseNo: null,
         tableNo: null,
@@ -239,11 +258,13 @@ function inferMetadata(content: string) {
         annexNo: annex,
         sectionTitle: `ANNEX ${annex}`,
       };
+      continue;
     }
 
     const annexSub = detectAnnexSubheading(line);
+
     if (annexSub) {
-      return {
+      state = {
         clauseNo: null,
         subClauseNo: null,
         tableNo: null,
@@ -251,12 +272,15 @@ function inferMetadata(content: string) {
         annexNo: annexSub.split("-")[0],
         sectionTitle: annexSub,
       };
+      continue;
     }
 
     const clause = detectClauseHeading(line);
+
     if (clause) {
       const split = splitClauseNumber(clause.clause);
-      return {
+
+      state = {
         clauseNo: split.clauseNo,
         subClauseNo: split.subClauseNo,
         tableNo: null,
@@ -264,43 +288,33 @@ function inferMetadata(content: string) {
         annexNo: null,
         sectionTitle: clause.title,
       };
+      continue;
     }
 
     const table = detectTable(line);
+
     if (table) {
-      return {
-        clauseNo: null,
-        subClauseNo: null,
-        tableNo: table,
-        figureNo: null,
-        annexNo: null,
-        sectionTitle: null,
-      };
+      state.tableNo = table;
+      state.figureNo = null;
+      continue;
     }
 
     const figure = detectFigure(line);
+
     if (figure) {
-      return {
-        clauseNo: null,
-        subClauseNo: null,
-        tableNo: null,
-        figureNo: figure,
-        annexNo: null,
-        sectionTitle: null,
-      };
+      state.figureNo = figure;
+      state.tableNo = null;
+      continue;
+    }
+
+    const generic = detectGenericHeading(line);
+
+    if (generic) {
+      state.sectionTitle = generic;
     }
   }
 
-  const generic = lines.map(detectGenericHeading).find(Boolean) || null;
-
-  return {
-    clauseNo: null,
-    subClauseNo: null,
-    tableNo: null,
-    figureNo: null,
-    annexNo: null,
-    sectionTitle: generic,
-  };
+  return state;
 }
 
 export async function POST(req: Request) {
@@ -330,6 +344,15 @@ export async function POST(req: Request) {
     const documentId = body?.documentId;
     const offset = Math.max(Number(body?.offset) || 0, 0);
     const limit = Math.min(Math.max(Number(body?.limit) || 20, 1), 25);
+
+    const priorState = {
+      clauseNo: body?.priorState?.clauseNo ?? null,
+      subClauseNo: body?.priorState?.subClauseNo ?? null,
+      tableNo: body?.priorState?.tableNo ?? null,
+      figureNo: body?.priorState?.figureNo ?? null,
+      annexNo: body?.priorState?.annexNo ?? null,
+      sectionTitle: body?.priorState?.sectionTitle ?? null,
+    };
 
     if (!documentId) {
       return NextResponse.json({ error: "documentId is required." }, { status: 400 });
@@ -380,8 +403,16 @@ export async function POST(req: Request) {
 
     let updatedChunks = 0;
 
+    let batchState = { ...priorState };
+
     for (const chunk of chunks) {
-      const inferred = inferMetadata(chunk.content);
+      const inferred = inferMetadata(
+        chunk.content,
+        batchState
+      );
+
+      // Carry context forward across chunks in this batch.
+      batchState = { ...inferred };
 
       // For chunks that are clearly numeric fragments, clear stale metadata.
       const numericFragment = isObviousNumericFragment(chunk.content);
@@ -396,8 +427,13 @@ export async function POST(req: Request) {
             subClauseNo: null,
             tableNo: chunk.table_no?.toString().match(/^\d+$/) ? chunk.table_no : null,
             figureNo: null,
-            annexNo: null,
-            sectionTitle: null,
+            annexNo:
+              inferred.annexNo ||
+              (chunk.annex_no ?? null),
+            sectionTitle:
+              inferred.annexNo
+                ? inferred.sectionTitle
+                : null,
           }
         : inferred;
 
@@ -442,6 +478,7 @@ export async function POST(req: Request) {
       nextOffset,
       complete,
       embeddingsPreserved: true,
+      nextState: batchState,
     });
   } catch (error: any) {
     console.error("STANDARD METADATA REPAIR ERROR:", error);

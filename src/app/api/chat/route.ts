@@ -267,11 +267,34 @@ ${source.content}
 const CITATION_TOKEN_REGEX =
   /\[\[CITE:(STD-\d+)\]\]/g;
 
+function stripModelAuthoredCitations(
+  text: string
+): string {
+  return text
+    .replace(
+      /\*\*Source:\s*[^*\n]+?\*\*/gi,
+      ""
+    )
+    .replace(
+      /\\bSource:\s*(?:IS\s*)?\\d{4,6}\s*(?::\s*\\d{4})?(?:\s*[—-]\s*(?:Clause|Table|Figure|Annex|Page|A-\d+|B-\d+)[^.\\n]*)?/gi,
+      ""
+    )
+    .replace(
+      /\\b(?:IS\s*)?\\d{4,6}\s*:\s*\\d{4}\s*[—-]\s*(?:Clause|Table|Figure|Annex|Page)[^.\\n]*/gi,
+      ""
+    )
+    .replace(/\\n{3,}/g, "\\n\\n")
+    .trim();
+}
+
 function replaceCitationTokens(
   text: string,
   citationMap: Map<string, string>
 ): string {
-  return text.replace(
+  const cleaned =
+    stripModelAuthoredCitations(text);
+
+  return cleaned.replace(
     CITATION_TOKEN_REGEX,
     (_match, sourceId: string) => {
       const citation =
@@ -704,6 +727,7 @@ Strict rules:
 5. For a direct table/value question, prefer a source labelled:
    DIRECT TABLE SOURCE — PREFER FOR DIRECT TABLE/VALUE QUESTIONS
    when that source's CONTENT contains the requested value.
+6. You are NOT allowed to write any human-readable citation or "Source: ..." text yourself. The server will generate it from [[CITE:STD-X]] tokens only.
 6. Do not cite an Annex/example merely because it repeats a value that is already
    directly present in a retrieved table.
 7. If no retrieved standard source supports the code-specific statement,

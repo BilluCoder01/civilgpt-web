@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -442,6 +443,9 @@ export default function Chat() {
       total: 146,
       percent: 0,
     });
+
+  const [isRepairingStandard, setIsRepairingStandard] =
+    useState(false);
 
   const [isFetchingHistory, setIsFetchingHistory] =
     useState(true);
@@ -1246,6 +1250,86 @@ export default function Chat() {
         });
       } finally {
         setIsProcessingStandard(false);
+      }
+    };
+
+  // ------------------------------------------------------------
+  // REPAIR IS 10262 CITATION METADATA
+  // ------------------------------------------------------------
+
+  const repairStandardMetadata =
+    async () => {
+      if (
+        isRepairingStandard ||
+        isProcessingStandard
+      ) {
+        return;
+      }
+
+      setIsRepairingStandard(true);
+      setUploadStatus(null);
+
+      try {
+        const res =
+          await fetch(
+            "/api/standards/repair-metadata",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify({
+                documentId:
+                  standardDocumentId ||
+                  "89ba6142-899d-408c-829b-f9634e2af7d2",
+              }),
+            }
+          );
+
+        const responseText =
+          await res.text();
+
+        let data: any = null;
+
+        try {
+          data = responseText
+            ? JSON.parse(responseText)
+            : null;
+        } catch {
+          throw new Error(
+            responseText ||
+              `Metadata repair failed with status ${res.status}.`
+          );
+        }
+
+        if (!res.ok) {
+          throw new Error(
+            data?.error ||
+              `Metadata repair failed with status ${res.status}.`
+          );
+        }
+
+        setUploadStatus({
+          type: "success",
+          message:
+            `Citation metadata repaired — ${data.updatedChunks} chunks updated. Embeddings were preserved.`,
+        });
+      } catch (error) {
+        console.error(
+          "Standard metadata repair failed:",
+          error
+        );
+
+        setUploadStatus({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to repair citation metadata.",
+        });
+      } finally {
+        setIsRepairingStandard(false);
       }
     };
 
@@ -2470,25 +2554,47 @@ export default function Chat() {
                             </p>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={processStandardEmbeddings}
-                            disabled={
-                              isProcessingStandard ||
-                              isLoading
-                            }
-                            className={`shrink-0 px-3.5 py-2 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                              isDarkMode
-                                ? "bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
-                                : "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                            }`}
-                          >
-                            {isProcessingStandard
-                              ? "Processing…"
-                              : standardProcessingProgress?.percent === 100
-                              ? "Completed"
-                              : "Process IS 10262"}
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={repairStandardMetadata}
+                              disabled={
+                                isRepairingStandard ||
+                                isProcessingStandard ||
+                                isLoading
+                              }
+                              className={`px-3.5 py-2 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isDarkMode
+                                  ? "bg-slate-700/60 text-slate-300 hover:bg-slate-700"
+                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              }`}
+                            >
+                              {isRepairingStandard
+                                ? "Repairing…"
+                                : "Repair citations"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={processStandardEmbeddings}
+                              disabled={
+                                isProcessingStandard ||
+                                isRepairingStandard ||
+                                isLoading
+                              }
+                              className={`shrink-0 px-3.5 py-2 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isDarkMode
+                                  ? "bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+                                  : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                              }`}
+                            >
+                              {isProcessingStandard
+                                ? "Processing…"
+                                : standardProcessingProgress?.percent === 100
+                                ? "Completed"
+                                : "Process IS 10262"}
+                            </button>
+                          </div>
                         </div>
 
                         {standardProcessingProgress && (

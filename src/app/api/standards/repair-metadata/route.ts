@@ -37,11 +37,44 @@ function splitClauseNumber(fullClause: string) {
 function detectClauseHeading(line: string) {
   const value = line.replace(/\s+/g, " ").trim();
   const match = value.match(/^(\d+(?:\.\d+){0,4})\s+(.+)$/);
+
   if (!match) return null;
 
   const clause = match[1].trim();
   const title = match[2].trim();
-  if (!title || !/^[A-Za-z]/.test(title)) return null;
+
+  if (!title || !/^[A-Za-z]/.test(title)) {
+    return null;
+  }
+
+  // IS-code clause numbers are positive. This removes OCR/formula
+  // fragments such as 0.086 rrr / 0.5 percent.
+  const firstClausePart = Number(clause.split(".")[0]);
+  if (!Number.isFinite(firstClausePart) || firstClausePart < 1) {
+    return null;
+  }
+
+  // Reject value/unit continuations such as:
+  // 320 kg/m3
+  // 350 I
+  // 140 I
+  // 20 percent
+  // 65.0 kN
+  const unitOrValueStart =
+    /^(?:percent|%|kg(?:\s*\/\s*(?:m|m2|m3))?|g(?:\s*\/\s*(?:m|m2|m3))?|kN(?:\s*\/\s*m)?|N(?:\s*\/\s*m)?|mm|cm|m|km|MPa|kPa|Pa|GPa|Hz|V|A|s|sec|min|hr|litre|liters?|I)\b/i;
+
+  if (unitOrValueStart.test(title)) {
+    return null;
+  }
+
+  // Common OCR/formula fragments.
+  if (
+    /^\d+(?:\.\d+)?\s*(?:percent|%|kg|g|kN|N|mm|cm|m|MPa|kPa|Pa|litre|liters?)\b/i.test(
+      title
+    )
+  ) {
+    return null;
+  }
 
   const firstWord = title
     .split(/\s+/)[0]
@@ -49,20 +82,72 @@ function detectClauseHeading(line: string) {
     .toLowerCase();
 
   const rejected = new Set([
-    "in", "mm", "cm", "m", "km", "kg", "g", "kn", "n",
-    "pa", "kpa", "mpa", "gpa", "hz", "v", "a", "s",
-    "sec", "min", "hr", "percent", "%", "i", "ii", "iii",
-    "iv", "v", "vi", "vii", "viii", "ix", "x",
+    "in",
+    "mm",
+    "cm",
+    "m",
+    "km",
+    "kg",
+    "g",
+    "kn",
+    "n",
+    "pa",
+    "kpa",
+    "mpa",
+    "gpa",
+    "hz",
+    "v",
+    "a",
+    "s",
+    "sec",
+    "min",
+    "hr",
+    "percent",
+    "i",
+    "ii",
+    "iii",
+    "iv",
+    "v",
+    "vi",
+    "vii",
+    "viii",
+    "ix",
+    "x",
   ]);
 
-  if (rejected.has(firstWord)) return null;
-  if (/^\d+(?:\.\d+)?\b/.test(title)) return null;
-  if (/[=×+−]/.test(title)) return null;
-  if (/^(?:at|from|to|of|using|with|per|for)\b/i.test(title)) return null;
+  if (rejected.has(firstWord)) {
+    return null;
+  }
+
+  // Roman-numeral table/list fragments such as "350 I".
+  if (
+    /^\d+(?:\.\d+)?\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\b/i.test(
+      `${clause} ${title}`
+    )
+  ) {
+    return null;
+  }
+
+  // Equations and calculations are not clause headings.
+  if (/[=×+−]/.test(title)) {
+    return null;
+  }
 
   if (
-    /\b(?:kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³|kN\/m|kN\/m²)\b/i.test(title) &&
-    /(?:at|from|to|of|supports?|units?|span|length|load|reaction|moment|deflection)/i.test(title)
+    /^(?:at|from|to|of|using|with|per|for)\b/i.test(
+      title
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    /\b(?:kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³|kN\/m|kN\/m²)\b/i.test(
+      title
+    ) &&
+    /(?:at|from|to|of|supports?|units?|span|length|load|reaction|moment|deflection|content)\b/i.test(
+      title
+    )
   ) {
     return null;
   }
@@ -102,9 +187,37 @@ function detectGenericHeading(line: string): string | null {
 
 function isObviousNumericFragment(content: string): boolean {
   const text = normalizeWhitespace(content);
-  if (/^\d+(?:\.\d+)?\s*(?:percent|%|kN|N|mm|cm|m|kg|MPa|kPa|Pa|m²|m³)\b/i.test(text)) return true;
-  if (/^\d+(?:\.\d+)?\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\b/i.test(text)) return true;
-  if (/^[0-9I\s.=×+\-_/]+$/.test(text.slice(0, 120))) return true;
+
+  if (
+    /^(?:\d+(?:\.\d+)?\s*)?(?:percent|%|kg(?:\s*\/\s*(?:m|m2|m3))?|g(?:\s*\/\s*(?:m|m2|m3))?|kN(?:\s*\/\s*m)?|N(?:\s*\/\s*m)?|mm|cm|m|MPa|kPa|Pa|litre|liters?)\b/i.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /^\d+(?:\.\d+)?\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\b/i.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /^0\.\d+\s+[A-Za-z]/.test(text)
+  ) {
+    return true;
+  }
+
+  if (
+    /^[0-9I\s.=×+\-_/]+$/.test(
+      text.slice(0, 120)
+    )
+  ) {
+    return true;
+  }
+
   return false;
 }
 
@@ -272,7 +385,12 @@ export async function POST(req: Request) {
 
       // For chunks that are clearly numeric fragments, clear stale metadata.
       const numericFragment = isObviousNumericFragment(chunk.content);
-      const next = numericFragment
+
+      const explicitFalseClause =
+        /^(?:\d+(?:\.\d+)?\s+(?:percent|%|kg(?:\s*\/\s*(?:m|m2|m3))?|g(?:\s*\/\s*(?:m|m2|m3))?|kN|N|mm|cm|m|MPa|kPa|Pa|I|II|III|IV|V|VI|VII|VIII|IX|X)\b)/i
+          .test(normalizeWhitespace(chunk.content));
+
+      const next = (numericFragment || explicitFalseClause)
         ? {
             clauseNo: null,
             subClauseNo: null,

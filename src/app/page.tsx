@@ -37,10 +37,6 @@ type UploadStatus =
 
 type UploadType = "engineering" | "standard";
 
-// Temporary: the prepared IS 10262:2009 document currently in the database.
-const EXISTING_STANDARD_DOCUMENT_ID =
-  "89ba6142-899d-408c-829b-f9634e2af7d2";
-
 // ------------------------------------------------------------
 // MESSAGE BUBBLE
 // ------------------------------------------------------------
@@ -426,26 +422,6 @@ export default function Chat() {
   const [uploadStatus, setUploadStatus] =
     useState<UploadStatus>(null);
 
-  const [standardDocumentId, setStandardDocumentId] =
-    useState<string | null>(EXISTING_STANDARD_DOCUMENT_ID);
-
-  const [isProcessingStandard, setIsProcessingStandard] =
-    useState(false);
-
-  const [standardProcessingProgress, setStandardProcessingProgress] =
-    useState<{
-      processed: number;
-      total: number;
-      percent: number;
-    } | null>({
-      processed: 0,
-      total: 146,
-      percent: 0,
-    });
-
-  const [isRepairingStandard, setIsRepairingStandard] =
-    useState(false);
-
   const [isFetchingHistory, setIsFetchingHistory] =
     useState(true);
 
@@ -691,29 +667,71 @@ export default function Chat() {
       messageId: string,
       content: string
     ) => {
-      try {
-        await navigator.clipboard.writeText(
-          content
-        );
-
-        setCopiedMessageId(
-          messageId
-        );
+      const markCopied = () => {
+        setCopiedMessageId(messageId);
 
         window.setTimeout(() => {
-          setCopiedMessageId(
-            (current) =>
-              current ===
-              messageId
-                ? null
-                : current
+          setCopiedMessageId((current) =>
+            current === messageId ? null : current
           );
         }, 1800);
+      };
+
+      try {
+        // Preferred path for secure contexts.
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.clipboard &&
+          window.isSecureContext
+        ) {
+          await navigator.clipboard.writeText(content);
+          markCopied();
+          return;
+        }
+
+        // Fallback for browsers/preview environments where the
+        // Clipboard API is unavailable or blocked.
+        const textarea =
+          document.createElement("textarea");
+
+        textarea.value = content;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "0";
+        textarea.style.opacity = "0";
+
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(
+          0,
+          textarea.value.length
+        );
+
+        const copied =
+          document.execCommand("copy");
+
+        document.body.removeChild(textarea);
+
+        if (!copied) {
+          throw new Error(
+            "The browser blocked the copy operation."
+          );
+        }
+
+        markCopied();
       } catch (error) {
         console.error(
           "Failed to copy message:",
           error
         );
+
+        window.setTimeout(() => {
+          window.alert(
+            "Copy was blocked by the browser. Please select the message and press Ctrl/Cmd+C."
+          );
+        }, 0);
       }
     };
 
@@ -1032,29 +1050,6 @@ export default function Chat() {
             file.name
         );
 
-        if (currentUploadType === "standard") {
-          setStandardDocumentId(
-            data.standardDocumentId || null
-          );
-
-          if (data.standardDocumentId) {
-            setStandardProcessingProgress({
-              processed: Number(data.processedChunks) || 0,
-              total: Number(data.totalChunks) || 0,
-              percent: Number(data.totalChunks) > 0
-                ? Math.round(
-                    ((Number(data.processedChunks) || 0) /
-                      Number(data.totalChunks)) *
-                      100
-                  )
-                : 0,
-            });
-          }
-        } else {
-          setStandardDocumentId(null);
-          setStandardProcessingProgress(null);
-        }
-
         if (data.duplicate) {
           setUploadStatus({
             type: "success",
@@ -1100,293 +1095,6 @@ export default function Chat() {
           fileInputRef.current.value =
             "";
         }
-      }
-    };
-
-  // ------------------------------------------------------------
-  // PROCESS STANDARD EMBEDDINGS
-  // ------------------------------------------------------------
-
-  const processStandardEmbeddings =
-    async () => {
-      const documentIdToProcess =
-        standardDocumentId ||
-        EXISTING_STANDARD_DOCUMENT_ID;
-
-      if (isProcessingStandard) {
-        return;
-      }
-
-      setStandardDocumentId(
-        documentIdToProcess
-      );
-
-      setIsProcessingStandard(true);
-      setUploadStatus(null);
-
-      try {
-        let finished = false;
-
-        while (!finished) {
-          const res = await fetch(
-            "/api/standards/process",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                documentId: documentIdToProcess,
-              }),
-            }
-          );
-
-          const responseText =
-            await res.text();
-
-          let data: any = null;
-
-          try {
-            data = responseText
-              ? JSON.parse(responseText)
-              : null;
-          } catch {
-            throw new Error(
-              responseText ||
-                `Processing request failed with status ${res.status}.`
-            );
-          }
-
-          if (data?.processedChunks != null) {
-            const processed =
-              Number(data.processedChunks) || 0;
-            const total =
-              Number(data.totalChunks) || 0;
-            const percent =
-              Number(data.percent) ||
-              (total > 0
-                ? Math.round(
-                    (processed / total) * 100
-                  )
-                : 0);
-
-            setStandardProcessingProgress({
-              processed,
-              total,
-              percent,
-            });
-          }
-
-          if (
-            data?.status ===
-            "completed"
-          ) {
-            setUploadStatus({
-              type: "success",
-              message:
-                `IS Standard ready — ${data.processedChunks}/${data.totalChunks} chunks embedded.`,
-            });
-
-            finished = true;
-            break;
-          }
-
-          if (
-            data?.status ===
-            "paused"
-          ) {
-            setUploadStatus({
-              type: "error",
-              message:
-                "Embedding quota reached. Processing is safely paused. You can resume later without starting over.",
-            });
-
-            finished = true;
-            break;
-          }
-
-          if (!res.ok) {
-            throw new Error(
-              data?.error ||
-                `Standard processing failed with status ${res.status}.`
-            );
-          }
-
-          const processed =
-            Number(data?.processedChunks) || 0;
-          const total =
-            Number(data?.totalChunks) || 0;
-
-          setUploadStatus({
-            type: "success",
-            message:
-              `Processing IS Standard — ${processed}/${total} chunks embedded${
-                total > 0
-                  ? ` (${Math.round((processed / total) * 100)}%)`
-                  : ""
-              }.`,
-          });
-
-          await new Promise((resolve) =>
-            window.setTimeout(
-              resolve,
-              300
-            )
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Standard processing failed:",
-          error
-        );
-
-        setUploadStatus({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to process IS Standard embeddings.",
-        });
-      } finally {
-        setIsProcessingStandard(false);
-      }
-    };
-
-  // ------------------------------------------------------------
-  // REPAIR IS 10262 CITATION METADATA
-  // ------------------------------------------------------------
-
-  const repairStandardMetadata =
-    async () => {
-      if (
-        isRepairingStandard ||
-        isProcessingStandard
-      ) {
-        return;
-      }
-
-      setIsRepairingStandard(true);
-      setUploadStatus(null);
-
-      try {
-        const documentId =
-          standardDocumentId ||
-          "89ba6142-899d-408c-829b-f9634e2af7d2";
-
-        let offset = 0;
-        let repaired = 0;
-        let total = 0;
-        let finished = false;
-
-        let priorState = {
-          clauseNo: null as string | null,
-          subClauseNo: null as string | null,
-          tableNo: null as string | null,
-          figureNo: null as string | null,
-          annexNo: null as string | null,
-          sectionTitle: null as string | null,
-        };
-
-        while (!finished) {
-          const res =
-            await fetch(
-              "/api/standards/repair-metadata",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
-                body: JSON.stringify({
-                  documentId,
-                  offset,
-                  limit: 20,
-                  priorState,
-                }),
-              }
-            );
-
-          const responseText =
-            await res.text();
-
-          let data: any = null;
-
-          try {
-            data = responseText
-              ? JSON.parse(responseText)
-              : null;
-          } catch {
-            throw new Error(
-              responseText ||
-                `Metadata repair failed with status ${res.status}.`
-            );
-          }
-
-          if (!res.ok) {
-            throw new Error(
-              data?.error ||
-                `Metadata repair failed with status ${res.status}.`
-            );
-          }
-
-          repaired +=
-            Number(data?.updatedChunks) || 0;
-          total =
-            Number(data?.totalChunks) || total;
-          offset =
-            Number(data?.nextOffset) || 0;
-          finished =
-            Boolean(data?.complete);
-
-          if (data?.nextState) {
-            priorState = {
-              clauseNo:
-                data.nextState.clauseNo ?? null,
-              subClauseNo:
-                data.nextState.subClauseNo ?? null,
-              tableNo:
-                data.nextState.tableNo ?? null,
-              figureNo:
-                data.nextState.figureNo ?? null,
-              annexNo:
-                data.nextState.annexNo ?? null,
-              sectionTitle:
-                data.nextState.sectionTitle ?? null,
-            };
-          }
-
-          setUploadStatus({
-            type: "success",
-            message:
-              finished
-                ? `Citation metadata repaired — ${repaired} chunks updated. Embeddings were preserved.`
-                : `Repairing citations — processed ${Math.min(
-                    offset,
-                    total || offset
-                  )}/${total || "…"} chunks…`,
-          });
-
-          if (!finished) {
-            await new Promise((resolve) =>
-              window.setTimeout(resolve, 100)
-            );
-          }
-        }
-      } catch (error) {
-        console.error(
-          "Standard metadata repair failed:",
-          error
-        );
-
-        setUploadStatus({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to repair citation metadata.",
-        });
-      } finally {
-        setIsRepairingStandard(false);
       }
     };
 
@@ -2577,102 +2285,6 @@ export default function Chat() {
               }`}
             >
               <div className="max-w-3xl mx-auto w-full">
-                {/* STANDARD EMBEDDING CONTROL */}
-
-                <div className="mb-3">
-                      <div
-                        className={`rounded-[18px] border px-4 py-3 shadow-sm ${
-                          isDarkMode
-                            ? "bg-[#1e1f20] border-slate-700"
-                            : "bg-white border-slate-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p
-                              className={`text-[12px] font-semibold ${
-                                isDarkMode
-                                  ? "text-slate-200"
-                                  : "text-slate-800"
-                              }`}
-                            >
-                              IS 10262:2009 embedding
-                            </p>
-                            <p
-                              className={`mt-0.5 text-[11px] ${
-                                isDarkMode
-                                  ? "text-slate-500"
-                                  : "text-slate-500"
-                              }`}
-                            >
-                              {standardProcessingProgress
-                                ? `${standardProcessingProgress.processed}/${standardProcessingProgress.total} chunks`
-                                : "Ready to start"}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={repairStandardMetadata}
-                              disabled={
-                                isRepairingStandard ||
-                                isProcessingStandard ||
-                                isLoading
-                              }
-                              className={`px-3.5 py-2 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                                isDarkMode
-                                  ? "bg-slate-700/60 text-slate-300 hover:bg-slate-700"
-                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                              }`}
-                            >
-                              {isRepairingStandard
-                                ? "Repairing…"
-                                : "Repair citations"}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={processStandardEmbeddings}
-                              disabled={
-                                isProcessingStandard ||
-                                isRepairingStandard ||
-                                isLoading
-                              }
-                              className={`shrink-0 px-3.5 py-2 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                                isDarkMode
-                                  ? "bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
-                                  : "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                              }`}
-                            >
-                              {isProcessingStandard
-                                ? "Processing…"
-                                : standardProcessingProgress?.percent === 100
-                                ? "Completed"
-                                : "Process IS 10262"}
-                            </button>
-                          </div>
-                        </div>
-
-                        {standardProcessingProgress && (
-                          <div
-                            className={`mt-3 h-1.5 rounded-full overflow-hidden ${
-                              isDarkMode
-                                ? "bg-slate-800"
-                                : "bg-slate-100"
-                            }`}
-                          >
-                            <div
-                              className="h-full rounded-full bg-amber-500 transition-all duration-300"
-                              style={{
-                                width: `${standardProcessingProgress.percent}%`,
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                 {/* PDF ATTACHMENT */}
 
                 {uploadedPdfName && (

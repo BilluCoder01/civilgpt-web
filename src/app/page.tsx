@@ -16,7 +16,8 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import MixDesignCalculator from "@/components/MixDesignCalculator";
 import UnitConverter from "@/components/UnitConverter";
-import SourceApiTest from "@/components/SourceApiTest";
+import StandardSourceViewer from "@/components/StandardSourceViewer"; // TEMPORARY TEST IMPORT
+
 
 type Message = {
   id: string;
@@ -444,6 +445,9 @@ export default function Chat() {
 
   const [standardTitle, setStandardTitle] =
     useState("");
+
+  // TEMPORARY TEST STATE
+  const [showTestViewer, setShowTestViewer] = useState(false);
 
   // Keeps the upload type stable while the native file picker is open.
   const uploadTypeRef =
@@ -1722,6 +1726,20 @@ export default function Chat() {
               </div>
             )}
           </div>
+
+          {/* TEMPORARY VIEWER TEST BUTTON */}
+          <div className="relative group w-full flex justify-center md:justify-start mt-4 border-t border-slate-700/30 pt-3">
+            <button
+              onClick={() => setShowTestViewer(true)}
+              className={`flex items-center rounded-full transition-colors ${isDarkMode ? "bg-rose-900/20 text-rose-400 border border-rose-900/50" : "bg-rose-50 text-rose-600 border border-rose-100"} ${isSidebarOpen ? "w-full py-2 px-3" : "h-[40px] w-[40px] justify-center px-0"}`}
+              title="Test Viewer Modal"
+            >
+              <span className="w-5 flex justify-center shrink-0 text-sm">🧪</span>
+              <span className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 font-medium ${isSidebarOpen ? "ml-3 opacity-100 max-w-[200px]" : "w-0 opacity-0 ml-0 max-w-0"}`}>
+                Test Viewer
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* HISTORY */}
@@ -2625,21 +2643,30 @@ export default function Chat() {
           </div>
         )}
 
+        {/* -------------------------------------------------- */}
+        {/* TEMPORARY VIEWER MODAL TEST */}
+        {/* -------------------------------------------------- */}
+        {showTestViewer && (
+          <StandardSourceViewer
+            isOpen={showTestViewer}
+            onClose={() => setShowTestViewer(false)}
+            documentId="89ba6142-899d-408c-829b-f9634e2af7d2" // Hardcoded test doc
+            page={8} // Hardcoded test page
+            title="IS 10262:2009 (Test Mode)"
+            citation="Table 2"
+            isDarkMode={isDarkMode}
+          />
+        )}
+
 
         {/* -------------------------------------------------- */}
         {/* CALCULATOR */}
         {/* -------------------------------------------------- */}
 
         {activeTab === "calculator" && (
-  <div className="h-full overflow-y-auto">
-    <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6">
-      <SourceApiTest isDarkMode={isDarkMode} />
-    </div>
-
-    <MixDesignCalculator
-      isDarkMode={isDarkMode}
-    />
-  </div>
+  <MixDesignCalculator
+    isDarkMode={isDarkMode}
+  />
 )}
 
         {/* -------------------------------------------------- */}

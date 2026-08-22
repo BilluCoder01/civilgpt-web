@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
-type StandardSourceViewerProps = {
+interface StandardSourceViewerProps {
   isOpen: boolean;
   onClose: () => void;
   documentId: string;
   page: number;
-  title?: string;
-  citation?: string;
+  title: string;
+  citation: string;
   isDarkMode: boolean;
-};
-
-type SourceResponse = {
-  success?: boolean;
-  filename?: string;
-  url?: string;
-  page?: number;
-  pageCount?: number | null;
-  error?: string;
-};
+}
 
 export default function StandardSourceViewer({
   isOpen,
@@ -30,350 +21,159 @@ export default function StandardSourceViewer({
   citation,
   isDarkMode,
 }: StandardSourceViewerProps) {
-  const [source, setSource] =
-    useState<SourceResponse | null>(null);
-  const [isLoading, setIsLoading] =
-    useState(false);
-  const [error, setError] =
-    useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isOpen) {
-      setSource(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+    if (!isOpen || !documentId) return;
 
-    let cancelled = false;
+    let isMounted = true;
+    setIsLoading(true);
+    setError(null);
 
-    const loadSource = async () => {
-      setIsLoading(true);
-      setError(null);
-      setSource(null);
-
+    const fetchPdf = async () => {
       try {
-        const response =
-          await fetch(
-            "/api/standards/source",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                documentId,
-                page,
-              }),
-            }
-          );
+        const res = await fetch("/api/standards/source", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId, page }),
+        });
 
-        const responseText =
-          await response.text();
-
-        let data: SourceResponse =
-          {};
-
-        try {
-          data = responseText
-            ? JSON.parse(responseText)
-            : {};
-        } catch {
-          throw new Error(
-            responseText ||
-              `Source request failed with status ${response.status}.`
-          );
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to load document source");
         }
 
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-              `Source request failed with status ${response.status}.`
-          );
+        const data = await res.json();
+        
+        if (isMounted && data.url) {
+          // Append the physical page hash to force the PDF viewer to jump
+          setUrl(`${data.url}#page=${page}`);
         }
-
-        if (
-          !data.url
-        ) {
-          throw new Error(
-            "The source API did not return a PDF URL."
-          );
-        }
-
-        if (!cancelled) {
-          setSource(data);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to open source PDF."
-          );
-        }
+      } catch (err: any) {
+        if (isMounted) setError(err.message);
       } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     };
 
-    loadSource();
+    fetchPdf();
 
     return () => {
-      cancelled = true;
+      isMounted = false;
     };
-  }, [
-    documentId,
-    isOpen,
-    page,
-  ]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const previousOverflow =
-      document.body.style.overflow;
-
-    document.body.style.overflow =
-      "hidden";
-
-    return () => {
-      document.body.style.overflow =
-        previousOverflow;
-    };
-  }, [isOpen]);
-
-  if (!isOpen) {
-    return null;
-  }
-
-  const pageNumber =
-    source?.page ?? page;
-
-  const pageCount =
-    source?.pageCount ?? null;
-
-  const basePdfUrl =
-    source?.url
-      ? `${source.url}#page=${pageNumber}`
-      : null;
+  }, [isOpen, documentId, page]);
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label={
-        title ||
-        "IS Standard source viewer"
-      }
+      className={`fixed inset-y-0 right-0 z-[70] md:relative flex flex-col h-screen transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0 border-l ${
+        isDarkMode ? "bg-[#1e1f20] border-slate-700" : "bg-[#f8f9fa] border-slate-200"
+      } ${
+        isOpen
+          ? "w-full md:w-[450px] lg:w-[500px] xl:w-[600px] translate-x-0"
+          : "w-[0px] translate-x-full opacity-0 border-transparent"
+      }`}
     >
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-
-      <div
-        className={`relative z-[121] flex h-[92vh] w-[96vw] max-w-7xl flex-col overflow-hidden rounded-[26px] border shadow-2xl ${
-          isDarkMode
-            ? "bg-[#1a1b1c] border-slate-700"
-            : "bg-white border-slate-200"
-        }`}
-      >
-        {/* HEADER */}
-        <div
-          className={`flex shrink-0 items-center justify-between gap-4 border-b px-4 py-3 md:px-5 ${
-            isDarkMode
-              ? "border-slate-700 bg-[#1e1f20]"
-              : "border-slate-200 bg-white"
-          }`}
-        >
-          <div className="min-w-0">
-            <div
-              className={`truncate text-[13px] font-semibold ${
-                isDarkMode
-                  ? "text-slate-200"
-                  : "text-slate-800"
-              }`}
-            >
-              {title ||
-                source?.filename ||
-                "IS Standard Source"}
+      {isOpen && (
+        <div className="flex flex-col w-screen md:w-[450px] lg:w-[500px] xl:w-[600px] h-full">
+          {/* HEADER */}
+          <div
+            className={`flex items-center justify-between px-5 py-3.5 shrink-0 border-b shadow-sm z-10 ${
+              isDarkMode ? "border-slate-700 bg-[#1e1f20]" : "border-slate-200 bg-white"
+            }`}
+          >
+            <div className="min-w-0 pr-4">
+              <h3
+                className={`text-[14px] font-bold truncate ${
+                  isDarkMode ? "text-slate-200" : "text-slate-800"
+                }`}
+              >
+                {title || "Document Source"}
+              </h3>
+              {citation && (
+                <p
+                  className={`text-[12px] truncate mt-0.5 font-medium ${
+                    isDarkMode ? "text-amber-400" : "text-amber-600"
+                  }`}
+                >
+                  {citation}
+                </p>
+              )}
             </div>
 
-            <div
-              className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] ${
-                isDarkMode
-                  ? "text-slate-500"
-                  : "text-slate-500"
-              }`}
-            >
-              {citation && (
-                <span>
-                  {citation}
-                </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {url && (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`p-2 rounded-xl transition-colors ${
+                    isDarkMode
+                      ? "hover:bg-slate-700 text-slate-400 hover:text-slate-200"
+                      : "hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="Open in standalone tab"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                </a>
               )}
-
-              {!citation && (
-                <span>
-                  Page {pageNumber}
-                  {pageCount
-                    ? ` / ${pageCount}`
-                    : ""}
-                </span>
-              )}
+              <button
+                onClick={onClose}
+                className={`p-2 rounded-xl transition-colors ${
+                  isDarkMode
+                    ? "hover:bg-slate-700 text-slate-400 hover:text-slate-200"
+                    : "hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                }`}
+                title="Close sidebar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {source?.url && (
-              <a
-                href={basePdfUrl || source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`hidden sm:inline-flex items-center rounded-full px-3 py-2 text-[11px] font-medium transition-colors ${
-                  isDarkMode
-                    ? "text-slate-300 hover:bg-slate-700"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Open PDF
-              </a>
+          {/* VIEWER BODY */}
+          <div className="flex-1 relative flex items-center justify-center bg-black/5">
+            {isLoading && (
+              <div className="flex flex-col items-center gap-4">
+                <span className="animate-spin text-3xl">⏳</span>
+                <span
+                  className={`text-[11px] font-bold uppercase tracking-widest ${
+                    isDarkMode ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  Decrypting & Loading Document...
+                </span>
+              </div>
             )}
 
-            <button
-              type="button"
-              onClick={onClose}
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-                isDarkMode
-                  ? "text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-              }`}
-              aria-label="Close source viewer"
-              title="Close"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
+            {error && !isLoading && (
+              <div
+                className={`p-5 mx-6 rounded-2xl border text-center shadow-sm ${
+                  isDarkMode
+                    ? "bg-red-900/20 border-red-900/50 text-red-400"
+                    : "bg-red-50 border-red-200 text-red-600"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 6l12 12M18 6 6 18"
-                />
-              </svg>
-            </button>
+                <p className="text-[14px] font-bold mb-1.5">Failed to open source</p>
+                <p className="text-[13px] opacity-90 leading-relaxed">{error}</p>
+              </div>
+            )}
+
+            {url && !isLoading && !error && (
+              <iframe
+                src={url}
+                className="absolute inset-0 w-full h-full border-none bg-white"
+                title="PDF Viewer"
+              />
+            )}
           </div>
         </div>
-
-        {/* BODY */}
-        <div
-          className={`relative flex-1 min-h-0 ${
-            isDarkMode
-              ? "bg-[#101112]"
-              : "bg-slate-100"
-          }`}
-        >
-          {isLoading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center">
-              <div
-                className={`rounded-2xl border px-5 py-4 text-center shadow-lg ${
-                  isDarkMode
-                    ? "bg-[#1e1f20] border-slate-700"
-                    : "bg-white border-slate-200"
-                }`}
-              >
-                <div className="text-xl mb-2">
-                  ⏳
-                </div>
-
-                <div
-                  className={`text-sm font-medium ${
-                    isDarkMode
-                      ? "text-slate-200"
-                      : "text-slate-800"
-                  }`}
-                >
-                  Opening source…
-                </div>
-
-                <div
-                  className={`mt-1 text-[11px] ${
-                    isDarkMode
-                      ? "text-slate-500"
-                      : "text-slate-500"
-                  }`}
-                >
-                  Loading page {pageNumber}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="absolute inset-0 flex items-center justify-center p-5">
-              <div
-                className={`max-w-md rounded-2xl border px-5 py-4 shadow-lg ${
-                  isDarkMode
-                    ? "bg-[#1e1f20] border-red-900/60"
-                    : "bg-white border-red-200"
-                }`}
-              >
-                <div
-                  className={`text-sm font-semibold ${
-                    isDarkMode
-                      ? "text-red-300"
-                      : "text-red-600"
-                  }`}
-                >
-                  Could not open source
-                </div>
-
-                <div
-                  className={`mt-2 text-[12px] leading-5 ${
-                    isDarkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
-                  }`}
-                >
-                  {error}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={`mt-4 rounded-full px-4 py-2 text-[11px] font-medium ${
-                    isDarkMode
-                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600"
-                      : "bg-slate-900 text-white hover:bg-slate-800"
-                  }`}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-
-          {basePdfUrl && !error && (
-            <iframe
-              title={
-                title ||
-                "IS Standard source PDF"
-              }
-              src={basePdfUrl}
-              className="h-full w-full border-0"
-            />
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

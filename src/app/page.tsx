@@ -230,7 +230,7 @@ const MessageBubble = memo(
                       const parts = href.replace("#viewer/", "").split("/");
                       const docId = parts[0] || FALLBACK_DOC_ID;
                       const page = parseInt(parts[1], 10) || 1;
-                      const score = parts.length > 2 ? parseFloat(parts[2]) : 0.70;
+                      const score = parts.length > 2 ? parseFloat(parts[2]) : 0.85;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
 
                       let pillStyling = isDark ? "bg-[#1e1f20] border-slate-700 text-slate-300" : "bg-white border-slate-200 text-slate-700 shadow-sm";

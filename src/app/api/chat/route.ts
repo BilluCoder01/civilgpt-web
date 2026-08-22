@@ -614,7 +614,7 @@ export async function POST(
       embedding.slice(0, 768);
 
     // ========================================================
-    // PARALLEL RAG SEARCH (OPTIMIZED MATCH COUNT TO PREVENT TIMEOUTS)
+    // PARALLEL RAG SEARCH (SUPER LIGHTWEIGHT FOR SPEED)
     // ========================================================
 
     const [
@@ -625,8 +625,8 @@ export async function POST(
         "match_standard_chunks",
         {
           query_embedding: queryEmbedding,
-          match_threshold: 0.50,
-          match_count: 3, // REDUCED FROM 6 TO 3 FOR SPEED
+          match_threshold: 0.40, // Slightly lowered threshold
+          match_count: 2,        // Reduced to 2 for instant execution
           p_user_id: user.id,
         }
       ),
@@ -635,8 +635,8 @@ export async function POST(
         "match_engineering_codes",
         {
           query_embedding: queryEmbedding,
-          match_threshold: 0.50,
-          match_count: 3, // REDUCED FROM 5 TO 3 FOR SPEED
+          match_threshold: 0.40,
+          match_count: 2,        // Reduced to 2 for instant execution
           p_user_id: user.id,
         }
       ),

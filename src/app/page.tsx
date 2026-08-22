@@ -45,8 +45,11 @@ type UploadStatus =
 type UploadType = "engineering" | "standard";
 
 // ------------------------------------------------------------
-// MESSAGE BUBBLE
+// MESSAGE BUBBLE & INTERCEPTOR
 // ------------------------------------------------------------
+
+// Matches the backend's generated markdown links: [Source: ...](url)
+const MARKDOWN_SOURCE_LINK_REGEX = /\[(Source:[^\]]+)\]\((#viewer\/[^\)]+)\)/g;
 
 const MessageBubble = memo(
   ({
@@ -64,6 +67,13 @@ const MessageBubble = memo(
     onCopy: (messageId: string, content: string) => void;
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
+    
+    // Ensure the backend's generated viewer links are correctly formatted for our custom link renderer
+    const processedContent = useMemo(() => {
+      if (m.role !== "assistant") return m.content;
+      return m.content;
+    }, [m.content, m.role]);
+
     return (
       <div
         className={`group ${
@@ -210,7 +220,7 @@ const MessageBubble = memo(
                       let dotColor = "bg-slate-400";
                       let tooltip = "View source document";
                       
-                      if (score !== null) {
+                      if (score !== null && !isNaN(score)) {
                         const percent = (score * 100).toFixed(1);
                         if (score >= 0.82) {
                           dotColor = "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]";
@@ -258,7 +268,7 @@ const MessageBubble = memo(
                                   d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
                                 />
                               </svg>
-                              {score !== null && (
+                              {score !== null && !isNaN(score) && (
                                 <span className={`absolute -top-1 -right-1.5 w-2 h-2 rounded-full border-[1.5px] ${isDark ? 'border-[#1e1f20]' : 'border-white'} ${dotColor}`} />
                               )}
                             </div>
@@ -281,7 +291,7 @@ const MessageBubble = memo(
                   },
                 }}
               >
-                {m.content}
+                {processedContent}
               </ReactMarkdown>
             )}
           </div>
@@ -483,7 +493,6 @@ export default function Chat() {
         return;
       }
 
-      // User starts with a fresh unsaved chat.
       setSessions(allSessions || []);
 
       setActiveSessionId(null);
@@ -561,7 +570,6 @@ export default function Chat() {
     };
 
     try {
-      // Preferred path for secure contexts.
       if (
         typeof navigator !== "undefined" &&
         navigator.clipboard &&
@@ -572,8 +580,6 @@ export default function Chat() {
         return;
       }
 
-      // Fallback for browsers/preview environments where the
-      // Clipboard API is unavailable or blocked.
       const textarea = document.createElement("textarea");
 
       textarea.value = content;
@@ -735,10 +741,6 @@ export default function Chat() {
     setUploadStatus(null);
 
     try {
-      // ------------------------------------------------------
-      // AUTHENTICATED USER
-      // ------------------------------------------------------
-
       const {
         data: { user },
         error: userError,
@@ -752,10 +754,6 @@ export default function Chat() {
         throw new Error("You must be signed in to upload a PDF.");
       }
 
-      // ------------------------------------------------------
-      // PDF VALIDATION
-      // ------------------------------------------------------
-
       const isPdf =
         file.type === "application/pdf" ||
         file.name.toLowerCase().endsWith(".pdf");
@@ -763,10 +761,6 @@ export default function Chat() {
       if (!isPdf) {
         throw new Error("Only PDF files are supported.");
       }
-
-      // ------------------------------------------------------
-      // DIRECT SUPABASE STORAGE UPLOAD
-      // ------------------------------------------------------
 
       const safeFilename = file.name
         .trim()
@@ -789,10 +783,6 @@ export default function Chat() {
           `Storage upload failed: ${storageUploadError.message}`
         );
       }
-
-      // ------------------------------------------------------
-      // SERVER-SIDE PROCESSING
-      // ------------------------------------------------------
 
       const payload: {
         storagePath: string;
@@ -883,18 +873,10 @@ export default function Chat() {
     }
   };
 
-  // ------------------------------------------------------------
-  // REMOVE PDF VISUAL CHIP
-  // ------------------------------------------------------------
-
   const removePdfAttachment = () => {
     setUploadedPdfName(null);
     setUploadStatus(null);
   };
-
-  // ------------------------------------------------------------
-  // SEND MESSAGE
-  // ------------------------------------------------------------
 
   const customHandleSubmit = async (e?: React.FormEvent) => {
     if (e) {
@@ -909,8 +891,6 @@ export default function Chat() {
 
     let sessionId = activeSessionId;
 
-    // Create the DB session only when
-    // the first message is actually sent.
     if (!sessionId) {
       const {
         data: { user },
@@ -1075,10 +1055,6 @@ export default function Chat() {
       setIsLoading(false);
     }
   };
-
-  // ------------------------------------------------------------
-  // RENDER
-  // ------------------------------------------------------------
 
   return (
     <div

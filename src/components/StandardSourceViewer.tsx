@@ -1,21 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
-import { createClient } from "@/utils/supabase/client";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
 
-// Load the PDF.js worker from a CDN matching the installed pdfjs-dist
-// version. This avoids bundler-specific worker configuration in Next.js.
-// If you'd rather self-host the worker, swap this for:
-//   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-//     "pdfjs-dist/build/pdf.worker.min.mjs",
-//     import.meta.url
-//   ).toString();
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Configure the PDF.js worker securely via CDN
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-type StandardSourceViewerProps = {
+interface StandardSourceViewerProps {
   isOpen: boolean;
   onClose: () => void;
   documentId: string;
@@ -23,49 +16,6 @@ type StandardSourceViewerProps = {
   title: string;
   citation: string;
   isDarkMode: boolean;
-};
-
-const PANEL_WIDTH = 500; // px — the fixed inner width used during the slide animation
-
-// ------------------------------------------------------------
-// CITATION HIGHLIGHT MATCHING
-// ------------------------------------------------------------
-// PDF.js text layers split page text into many small positioned <span>
-// items, and a multi-word citation like "Table 2" is frequently split
-// across two separate items ("Table" / "2"), so a single full-phrase
-// regex often won't find a match inside any one item. We try the full
-// phrase first (works when the phrase does live in one item), then fall
-// back to matching just the bare identifier (e.g. "2", "3.2.1") pulled
-// out of the citation, which is far more likely to appear as its own
-// isolated text item on the page.
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function buildHighlightPatterns(citation: string): RegExp[] {
-  const trimmed = citation.trim();
-  if (!trimmed) return [];
-
-  const patterns: RegExp[] = [new RegExp(`(${escapeRegExp(trimmed)})`, "gi")];
-
-  const idMatch = trimmed.match(/\d+(?:\.\d+)*/);
-  if (idMatch) {
-    patterns.push(new RegExp(`(?<![\\w.])(${escapeRegExp(idMatch[0])})(?![\\w.])`, "g"));
-  }
-
-  return patterns;
-}
-
-function highlightTextItem(text: string, patterns: RegExp[]): string {
-  for (const pattern of patterns) {
-    pattern.lastIndex = 0;
-    if (pattern.test(text)) {
-      pattern.lastIndex = 0;
-      return text.replace(pattern, '<mark class="cgpt-citation-highlight">$1</mark>');
-    }
-  }
-  return text;
 }
 
 export default function StandardSourceViewer({
@@ -77,277 +27,215 @@ export default function StandardSourceViewer({
   citation,
   isDarkMode,
 }: StandardSourceViewerProps) {
-  const supabase = useMemo(() => createClient(), []);
+  const [url, setUrl] = useState<string | null>(null);
+  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+  const [isPdfLoading, setIsPdfLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [scale, setScale] = useState(1.2);
 
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [isResolvingUrl, setIsResolvingUrl] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageNumber, setPageNumber] = useState(page || 1);
-  const [scale, setScale] = useState(1.15);
-
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const highlightScrollAttemptedRef = useRef(false);
-
-  const highlightPatterns = useMemo(() => buildHighlightPatterns(citation), [citation]);
-
-  // ----------------------------------------------------------
-  // Resolve documentId -> signed Supabase Storage URL
-  // ----------------------------------------------------------
+  // Fetch the Secure Signed URL
   useEffect(() => {
-    if (!documentId) return;
+    if (!isOpen || !documentId) return;
 
-    let cancelled = false;
+    let isMounted = true;
+    setIsLoadingUrl(true);
+    setIsPdfLoading(true);
+    setError(null);
 
-    const resolveUrl = async () => {
-      setIsResolvingUrl(true);
-      setLoadError(null);
-      setPdfUrl(null);
-
+    const fetchPdf = async () => {
       try {
-        // ASSUMPTION: verify `storage_path` matches your actual
-        // standard_documents schema.
-        const { data: docRow, error: docError } = await supabase
-          .from("standard_documents")
-          .select("storage_path")
-          .eq("id", documentId)
-          .single();
+        const res = await fetch("/api/standards/source", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId, page }),
+        });
 
-        if (docError || !docRow?.storage_path) {
-          throw new Error(docError?.message || "Document not found.");
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to load document source");
         }
 
-        const { data: signed, error: signError } = await supabase.storage
-          .from("civilgpt-pdfs")
-          .createSignedUrl(docRow.storage_path, 60 * 60);
-
-        if (signError || !signed?.signedUrl) {
-          throw new Error(signError?.message || "Could not sign document URL.");
+        const data = await res.json();
+        
+        if (isMounted && data.url) {
+          setUrl(data.url);
         }
-
-        if (!cancelled) {
-          setPdfUrl(signed.signedUrl);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : "Failed to load document.");
-        }
+      } catch (err: any) {
+        if (isMounted) setError(err.message);
       } finally {
-        if (!cancelled) setIsResolvingUrl(false);
+        if (isMounted) setIsLoadingUrl(false);
       }
     };
 
-    resolveUrl();
+    fetchPdf();
 
     return () => {
-      cancelled = true;
+      isMounted = false;
     };
-  }, [documentId, supabase]);
+  }, [isOpen, documentId, page]);
 
-  // Jump to the cited page whenever a new citation opens the viewer.
-  useEffect(() => {
-    setPageNumber(page || 1);
-    highlightScrollAttemptedRef.current = false;
-  }, [page, documentId]);
+  // Extract the most specific target to highlight from the citation string
+  const targetText = useMemo(() => {
+    if (!citation) return "";
+    const parts = citation.split("—").map((p) => p.trim());
+    const validParts = parts.filter(
+      (p) => !p.match(/^(IS|Page|Source|View Source)/i)
+    );
+    return validParts.length > 0 ? validParts[validParts.length - 1] : "";
+  }, [citation]);
 
-  const goToPage = (next: number) => {
-    if (!numPages) return;
-    setPageNumber(Math.min(Math.max(next, 1), numPages));
-  };
+  // Custom renderer to inject <mark> tags into the PDF text layer using an HTML string
+  const customTextRenderer = useCallback(
+    (textItem: any) => {
+      const str = textItem.str;
+      if (!targetText || !str) return str;
 
-  const handleTextLayerRendered = () => {
-    if (highlightScrollAttemptedRef.current) return;
-    highlightScrollAttemptedRef.current = true;
+      // Escape special characters and create a case-insensitive regex
+      const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(${escapeRegExp(targetText)})`, "gi");
 
-    // Give the text layer a tick to paint before searching for the mark.
-    window.setTimeout(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-
-      const highlighted = container.querySelector(".cgpt-citation-highlight");
-      if (highlighted) {
-        highlighted.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (regex.test(str)) {
+        // Return as an HTML string to satisfy react-pdf types
+        return str.replace(
+          regex,
+          `<mark class="bg-amber-300 text-transparent rounded-sm shadow-[0_0_8px_rgba(252,211,77,0.8)] highlight-mark" style="color: transparent">$1</mark>`
+        );
       }
-    }, 60);
+      return str;
+    },
+    [targetText]
+  );
+
+  // Auto-scroll to the highlight once the page completely renders
+  const onPageLoadSuccess = () => {
+    setIsPdfLoading(false);
+    setTimeout(() => {
+      const mark = document.querySelector(".highlight-mark");
+      if (mark) {
+        mark.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 400); // Slight delay ensures DOM is fully painted
   };
 
   return (
     <div
-      className={`h-full shrink-0 border-l overflow-hidden transition-[width] duration-300 ease-in-out ${
-        isOpen ? `w-[${PANEL_WIDTH}px]` : "w-0"
-      } ${isDarkMode ? "bg-[#1e1f20] border-slate-800" : "bg-white border-slate-200"}`}
-      style={{ width: isOpen ? PANEL_WIDTH : 0 }}
-      aria-hidden={!isOpen}
+      className={`fixed inset-y-0 right-0 z-[70] md:relative flex flex-col h-screen transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0 border-l ${
+        isDarkMode ? "bg-[#1e1f20] border-slate-700" : "bg-[#f8f9fa] border-slate-200"
+      } ${
+        isOpen
+          ? "w-full md:w-[450px] lg:w-[500px] xl:w-[600px] translate-x-0"
+          : "w-[0px] translate-x-full opacity-0 border-transparent"
+      }`}
     >
-      {/* Fixed-width inner shell so content never reflows/squishes mid-animation */}
-      <div style={{ width: PANEL_WIDTH }} className="h-full flex flex-col">
-        {/* HEADER */}
-        <div
-          className={`flex items-start justify-between gap-3 px-4 py-3.5 border-b shrink-0 ${
-            isDarkMode ? "border-slate-800" : "border-slate-200"
-          }`}
-        >
-          <div className="min-w-0">
-            <p
-              className={`text-[13px] font-semibold truncate ${
-                isDarkMode ? "text-slate-100" : "text-slate-900"
-              }`}
-              title={title}
-            >
-              {title || "Source document"}
-            </p>
-            {citation && (
-              <p
-                className={`mt-0.5 text-[11.5px] truncate ${
-                  isDarkMode ? "text-amber-400/80" : "text-amber-700"
+      {isOpen && (
+        <div className="flex flex-col w-screen md:w-[450px] lg:w-[500px] xl:w-[600px] h-full">
+          {/* HEADER */}
+          <div
+            className={`flex items-center justify-between px-5 py-3.5 shrink-0 border-b shadow-sm z-20 relative ${
+              isDarkMode ? "border-slate-700 bg-[#1e1f20]" : "border-slate-200 bg-white"
+            }`}
+          >
+            <div className="min-w-0 pr-4">
+              <h3
+                className={`text-[14px] font-bold truncate ${
+                  isDarkMode ? "text-slate-200" : "text-slate-800"
                 }`}
-                title={citation}
               >
-                {citation}
-              </p>
+                {title || "Document Source"}
+              </h3>
+              {citation && (
+                <p
+                  className={`text-[12px] truncate mt-0.5 font-medium ${
+                    isDarkMode ? "text-amber-400" : "text-amber-600"
+                  }`}
+                >
+                  {citation.replace(/(View )?Source:\s*/i, '')}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Zoom Controls */}
+              <div className={`flex items-center mr-2 rounded-lg border overflow-hidden ${isDarkMode ? "border-slate-700" : "border-slate-200"}`}>
+                 <button onClick={() => setScale(prev => Math.max(0.5, prev - 0.2))} className={`px-2.5 py-1 transition-colors ${isDarkMode ? "bg-[#333537] hover:bg-slate-700 text-slate-300" : "bg-slate-50 hover:bg-slate-200 text-slate-600"}`}>-</button>
+                 <span className={`px-2 py-1 text-[11px] font-semibold border-x ${isDarkMode ? "bg-[#1e1f20] border-slate-700 text-slate-400" : "bg-white border-slate-200 text-slate-500"}`}>{Math.round(scale * 100)}%</span>
+                 <button onClick={() => setScale(prev => Math.min(2.5, prev + 0.2))} className={`px-2.5 py-1 transition-colors ${isDarkMode ? "bg-[#333537] hover:bg-slate-700 text-slate-300" : "bg-slate-50 hover:bg-slate-200 text-slate-600"}`}>+</button>
+              </div>
+
+              {url && (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`p-2 rounded-xl transition-colors ${
+                    isDarkMode
+                      ? "hover:bg-slate-700 text-slate-400 hover:text-slate-200"
+                      : "hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="Open full PDF in new tab"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                </a>
+              )}
+              <button
+                onClick={onClose}
+                className={`p-2 rounded-xl transition-colors ${
+                  isDarkMode
+                    ? "hover:bg-slate-700 text-rose-400 hover:bg-rose-900/30"
+                    : "hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                }`}
+                title="Close sidebar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* VIEWER BODY */}
+          <div className={`flex-1 relative flex flex-col items-center overflow-y-auto ${isDarkMode ? "bg-[#131314]" : "bg-slate-100"}`}>
+            
+            {(isLoadingUrl || isPdfLoading) && !error && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/5 backdrop-blur-sm">
+                <span className="animate-spin text-3xl mb-4">⏳</span>
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  {isLoadingUrl ? "Decrypting Document..." : "Rendering Page..."}
+                </span>
+              </div>
+            )}
+
+            {error && (
+              <div className={`m-auto p-5 max-w-sm rounded-2xl border text-center shadow-sm ${isDarkMode ? "bg-red-900/20 border-red-900/50 text-red-400" : "bg-red-50 border-red-200 text-red-600"}`}>
+                <p className="text-[14px] font-bold mb-1.5">Failed to load document</p>
+                <p className="text-[13px] opacity-90 leading-relaxed">{error}</p>
+              </div>
+            )}
+
+            {url && !error && (
+              <div className="py-8 px-4 w-full flex justify-center">
+                <Document
+                  file={url}
+                  loading={null}
+                  error={null}
+                >
+                  <Page
+                    pageNumber={page}
+                    scale={scale}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    customTextRenderer={customTextRenderer}
+                    onLoadSuccess={onPageLoadSuccess}
+                    className="shadow-2xl bg-white"
+                  />
+                </Document>
+              </div>
             )}
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-              isDarkMode
-                ? "text-slate-500 hover:bg-slate-700 hover:text-slate-200"
-                : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            }`}
-            aria-label="Close source viewer"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="w-4 h-4"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
         </div>
-
-        {/* TOOLBAR */}
-        <div
-          className={`flex items-center justify-between gap-2 px-3 py-2 border-b shrink-0 ${
-            isDarkMode ? "border-slate-800" : "border-slate-200"
-          }`}
-        >
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => goToPage(pageNumber - 1)}
-              disabled={pageNumber <= 1}
-              className={`w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-30 transition-colors ${
-                isDarkMode ? "hover:bg-slate-700 text-slate-300" : "hover:bg-slate-100 text-slate-600"
-              }`}
-              aria-label="Previous page"
-            >
-              ‹
-            </button>
-
-            <span className={`text-[12px] tabular-nums px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              {numPages ? `${pageNumber} / ${numPages}` : "—"}
-            </span>
-
-            <button
-              type="button"
-              onClick={() => goToPage(pageNumber + 1)}
-              disabled={!numPages || pageNumber >= numPages}
-              className={`w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-30 transition-colors ${
-                isDarkMode ? "hover:bg-slate-700 text-slate-300" : "hover:bg-slate-100 text-slate-600"
-              }`}
-              aria-label="Next page"
-            >
-              ›
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setScale((s) => Math.max(0.6, +(s - 0.15).toFixed(2)))}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] transition-colors ${
-                isDarkMode ? "hover:bg-slate-700 text-slate-300" : "hover:bg-slate-100 text-slate-600"
-              }`}
-              aria-label="Zoom out"
-            >
-              −
-            </button>
-            <span className={`text-[11px] tabular-nums w-9 text-center ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-              {Math.round(scale * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setScale((s) => Math.min(2.5, +(s + 0.15).toFixed(2)))}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] transition-colors ${
-                isDarkMode ? "hover:bg-slate-700 text-slate-300" : "hover:bg-slate-100 text-slate-600"
-              }`}
-              aria-label="Zoom in"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {/* PDF CONTENT */}
-        <div
-          ref={scrollContainerRef}
-          className={`flex-1 overflow-auto px-3 py-4 flex justify-center ${
-            isDarkMode ? "bg-[#131314]" : "bg-slate-100"
-          }`}
-        >
-          {isResolvingUrl && (
-            <div className={`flex items-center justify-center h-full text-sm ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-              <span className="animate-spin mr-2">⏳</span> Loading document…
-            </div>
-          )}
-
-          {loadError && !isResolvingUrl && (
-            <div className={`flex flex-col items-center justify-center h-full text-center px-4 ${isDarkMode ? "text-red-400" : "text-red-500"}`}>
-              <p className="text-sm font-medium">Couldn't load this document</p>
-              <p className={`mt-1 text-xs ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>{loadError}</p>
-            </div>
-          )}
-
-          {pdfUrl && !loadError && (
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-              onLoadError={(err) => setLoadError(err.message)}
-              loading={
-                <div className={`text-sm ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-                  <span className="animate-spin mr-2">⏳</span> Rendering…
-                </div>
-              }
-            >
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                renderTextLayer
-                renderAnnotationLayer
-                onRenderTextLayerSuccess={handleTextLayerRendered}
-                customTextRenderer={(textItem) => highlightTextItem(textItem.str, highlightPatterns)}
-                className={`shadow-lg ${isDarkMode ? "shadow-black/40" : "shadow-slate-300/60"}`}
-              />
-            </Document>
-          )}
-        </div>
-      </div>
-
-      {/* Highlight styling — scoped globally since PDF.js injects raw HTML into the text layer */}
-      <style jsx global>{`
-        .cgpt-citation-highlight {
-          background-color: rgba(245, 158, 11, 0.55);
-          border-radius: 2px;
-          padding: 0 1px;
-        }
-      `}</style>
+      )}
     </div>
   );
 }

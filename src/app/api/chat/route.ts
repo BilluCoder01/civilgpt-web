@@ -182,7 +182,6 @@ function buildStandardContext(
       const docId = source.standard_document_id || "";
       const page = source.page_number || 1;
       
-      // Inject the similarity score into the URL string
       const citationLink = docId 
         ? `[Source: ${citationText}](#viewer/${docId}/${page}/${source.similarity.toFixed(3)})` 
         : `**Source: ${citationText}**`;
@@ -615,7 +614,7 @@ export async function POST(
       embedding.slice(0, 768);
 
     // ========================================================
-    // PARALLEL RAG SEARCH
+    // PARALLEL RAG SEARCH (OPTIMIZED MATCH COUNT TO PREVENT TIMEOUTS)
     // ========================================================
 
     const [
@@ -627,7 +626,7 @@ export async function POST(
         {
           query_embedding: queryEmbedding,
           match_threshold: 0.50,
-          match_count: 6,
+          match_count: 3, // REDUCED FROM 6 TO 3 FOR SPEED
           p_user_id: user.id,
         }
       ),
@@ -637,7 +636,7 @@ export async function POST(
         {
           query_embedding: queryEmbedding,
           match_threshold: 0.50,
-          match_count: 5,
+          match_count: 3, // REDUCED FROM 5 TO 3 FOR SPEED
           p_user_id: user.id,
         }
       ),

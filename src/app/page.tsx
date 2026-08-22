@@ -16,6 +16,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import MixDesignCalculator from "@/components/MixDesignCalculator";
 import UnitConverter from "@/components/UnitConverter";
+import SourceApiTest from "@/components/SourceApiTest";
 
 type Message = {
   id: string;
@@ -2623,6 +2624,7 @@ export default function Chat() {
             </div>
           </div>
         )}
+
 
         {/* -------------------------------------------------- */}
         {/* CALCULATOR */}

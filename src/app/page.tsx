@@ -53,7 +53,7 @@ interface ParsedCitation {
 }
 
 // ------------------------------------------------------------
-// ROBUST CITATION PARSING HELPERS (CLAUDE'S FIX)
+// ROBUST CITATION PARSING HELPERS
 // ------------------------------------------------------------
 
 function parseCitationHref(href: string): ParsedCitation | null {
@@ -123,6 +123,7 @@ const MessageBubble = memo(
 
       let text = m.content;
       
+      // Preserve the real score if provided by the backend instead of overwriting it
       text = text.replace(
         /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
         (_match, label, docId, page, score) => {

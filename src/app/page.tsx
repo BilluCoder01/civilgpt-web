@@ -18,7 +18,6 @@ import MixDesignCalculator from "@/components/MixDesignCalculator";
 import UnitConverter from "@/components/UnitConverter";
 import dynamic from "next/dynamic";
 
-// DYNAMICALLY IMPORT THE VIEWER WITH SSR DISABLED TO FIX THE DOMMatrix BUILD CRASH
 const StandardSourceViewer = dynamic(
   () => import("@/components/StandardSourceViewer"),
   { ssr: false }
@@ -46,13 +45,8 @@ type UploadStatus =
 type UploadType = "engineering" | "standard";
 
 // ------------------------------------------------------------
-// MESSAGE BUBBLE & INTERCEPTOR
+// MESSAGE BUBBLE
 // ------------------------------------------------------------
-
-const VIEWER_DOC_ID = "89ba6142-899d-408c-829b-f9634e2af7d2"; 
-
-// Matches: **Source: IS 10262:2009 — Clause 3.2.1.2 — Table 2 — Page 8**
-const SOURCE_CITATION_REGEX = /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/g;
 
 const MessageBubble = memo(
   ({
@@ -70,21 +64,6 @@ const MessageBubble = memo(
     onCopy: (messageId: string, content: string) => void;
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
-    
-    // Intercept the backend's plain "**Source: ... — Page N**" text and turn
-    // it into a markdown link using "#viewer/" so ReactMarkdown doesn't strip it.
-    const processedContent = useMemo(() => {
-      if (m.role !== "assistant") return m.content;
-
-      return m.content.replace(
-        SOURCE_CITATION_REGEX,
-        (_match, citationLabel: string, pageNumber: string) => {
-          const label = citationLabel.trim();
-          return `[View Source: ${label}](#viewer/${VIEWER_DOC_ID}/${pageNumber})`;
-        }
-      );
-    }, [m.content, m.role]);
-
     return (
       <div
         className={`group ${
@@ -219,20 +198,38 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-                  // Sleek Aesthetic Link Component for Citations
+                  // Sleek Aesthetic Link Component with Confidence Indicator
                   a: ({ node, href, children, ...props }) => {
                     if (href?.startsWith("#viewer/")) {
                       const parts = href.replace("#viewer/", "").split("/");
                       const docId = parts[0];
                       const page = parseInt(parts[1], 10) || 1;
+                      const score = parts.length > 2 ? parseFloat(parts[2]) : null;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
+
+                      let dotColor = "bg-slate-400";
+                      let tooltip = "View source document";
+                      
+                      if (score !== null) {
+                        const percent = (score * 100).toFixed(1);
+                        if (score >= 0.82) {
+                          dotColor = "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]";
+                          tooltip = `High Confidence Match (${percent}%)`;
+                        } else if (score >= 0.75) {
+                          dotColor = "bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]";
+                          tooltip = `Medium Confidence Match (${percent}%)`;
+                        } else {
+                          dotColor = "bg-rose-500 shadow-[0_0_5px_rgba(243,33,33,0.5)]";
+                          tooltip = `Low Confidence Match (${percent}%) - Verify source manually`;
+                        }
+                      }
 
                       return (
                         <span className="inline-block mt-2 mb-1 mr-2 align-middle">
                           <button
                             type="button"
                             onClick={(e) => {
-                              e.preventDefault(); // STOP THE BROWSER FROM NAVIGATING OR REFRESHING
+                              e.preventDefault(); 
                               onOpenViewer(docId, page, "Document Source", citationText);
                             }}
                             className={`group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-105 active:scale-95 ${
@@ -240,26 +237,31 @@ const MessageBubble = memo(
                                 ? "bg-[#1e1f20] border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-amber-400 shadow-sm"
                                 : "bg-white border-slate-200 hover:border-amber-300 text-slate-600 hover:text-amber-700 shadow-sm"
                             }`}
-                            title="View source document"
+                            title={tooltip}
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={2.5}
-                              stroke="currentColor"
-                              className={`w-3.5 h-3.5 ${
-                                isDark
-                                  ? 'text-amber-500/70 group-hover:text-amber-400'
-                                  : 'text-amber-500 group-hover:text-amber-600'
-                              }`}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-                              />
-                            </svg>
+                            <div className="relative flex items-center justify-center">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={2.5}
+                                stroke="currentColor"
+                                className={`w-3.5 h-3.5 ${
+                                  isDark
+                                    ? 'text-amber-500/70 group-hover:text-amber-400'
+                                    : 'text-amber-500 group-hover:text-amber-600'
+                                }`}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                                />
+                              </svg>
+                              {score !== null && (
+                                <span className={`absolute -top-1 -right-1.5 w-2 h-2 rounded-full border-[1.5px] ${isDark ? 'border-[#1e1f20]' : 'border-white'} ${dotColor}`} />
+                              )}
+                            </div>
                             <span className="truncate max-w-[200px]">{citationText}</span>
                           </button>
                         </span>
@@ -279,8 +281,7 @@ const MessageBubble = memo(
                   },
                 }}
               >
-                {/* USE THE PROCESSED CONTENT HERE */}
-                {processedContent}
+                {m.content}
               </ReactMarkdown>
             )}
           </div>
@@ -293,7 +294,7 @@ const MessageBubble = memo(
           >
             <button
               type="button"
-              onClick={() => onCopy(m.id, m.content)} // Copies raw content, not markdown hack
+              onClick={() => onCopy(m.id, m.content)}
               className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all duration-200 ${
                 isCopied
                   ? isDark
@@ -395,12 +396,8 @@ export default function Chat() {
     citation: "",
   });
 
-  // Keeps the upload type stable while the native file picker is open.
   const uploadTypeRef = useRef<UploadType>("engineering");
-
-  // Message ID currently displaying "Copied".
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionLoadRef = useRef(0);
@@ -770,19 +767,6 @@ export default function Chat() {
       // ------------------------------------------------------
       // DIRECT SUPABASE STORAGE UPLOAD
       // ------------------------------------------------------
-      //
-      // IMPORTANT:
-      // The PDF is uploaded directly from the browser to
-      // Supabase Storage. It never travels through Vercel's
-      // /api/upload request body, avoiding FUNCTION_PAYLOAD_TOO_LARGE.
-      //
-      // Storage path format:
-      // <user-id>/<random-id>-<safe-filename>.pdf
-      //
-      // The Storage RLS policy only allows the authenticated
-      // user to insert into the first-level folder matching
-      // their own user ID.
-      // ------------------------------------------------------
 
       const safeFilename = file.name
         .trim()
@@ -808,10 +792,6 @@ export default function Chat() {
 
       // ------------------------------------------------------
       // SERVER-SIDE PROCESSING
-      // ------------------------------------------------------
-      //
-      // Only a small JSON payload is now sent to /api/upload.
-      // The server downloads the PDF from private Storage.
       // ------------------------------------------------------
 
       const payload: {

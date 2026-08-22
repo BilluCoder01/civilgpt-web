@@ -45,7 +45,7 @@ type EngineeringDocument = {
 
 type StandardChunk = {
   id: number;
-  standard_document_id?: string; // ADDED: Required to link to the specific PDF
+  standard_document_id?: string;
   content: string;
 
   page_number: number | null;
@@ -179,12 +179,12 @@ function buildStandardContext(
       const citationText =
         formatStandardCitation(source);
 
-      // UPDATED: Dynamically generate the viewer:// markdown link
       const docId = source.standard_document_id || "";
       const page = source.page_number || 1;
       
+      // Inject the similarity score into the URL string
       const citationLink = docId 
-        ? `[Source: ${citationText}](viewer://${docId}/${page})` 
+        ? `[Source: ${citationText}](#viewer/${docId}/${page}/${source.similarity.toFixed(3)})` 
         : `**Source: ${citationText}**`;
 
       citationMap.set(
@@ -309,7 +309,6 @@ function replaceCitationTokens(
       const citation =
         citationMap.get(sourceId);
 
-      // UPDATED: Now directly inserting the fully formatted Markdown link
       return citation ? citation : "";
     }
   );
@@ -379,7 +378,6 @@ function createCitationRewriteStream(
     }
 
     if (flushAll) {
-      // Remove an incomplete trailing citation token rather than exposing it.
       pending =
         pending.replace(
           /\[\[CITE:[A-Za-z0-9_-]*$/,

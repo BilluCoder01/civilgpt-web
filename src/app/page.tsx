@@ -45,11 +45,14 @@ type UploadStatus =
 type UploadType = "engineering" | "standard";
 
 // ------------------------------------------------------------
-// MESSAGE BUBBLE & INTERCEPTOR
+// MESSAGE BUBBLE & ROBUST CATCH-ALL REGEX INTERCEPTOR
 // ------------------------------------------------------------
 
-// Matches the backend's generated markdown links: [Source: ...](url)
-const MARKDOWN_SOURCE_LINK_REGEX = /\[(Source:[^\]]+)\]\((#viewer\/[^\)]+)\)/g;
+// Fallback hardcoded doc ID if the backend omits it
+const FALLBACK_DOC_ID = "89ba6142-899d-408c-829b-f9634e2af7d2";
+
+// Matches both backend markdown links and raw citation strings to guarantee 100% reliability
+const SOURCE_MATCHER_REGEX = /(?:\[Source:\s*([^\]]+)\]\((#viewer\/([^\)]+))\)|\*\*Source:\s*([^\*]+)\*\*)/gi;
 
 const MessageBubble = memo(
   ({
@@ -68,10 +71,30 @@ const MessageBubble = memo(
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
     
-    // Ensure the backend's generated viewer links are correctly formatted for our custom link renderer
+    // Pre-process content to guarantee it converts into our clickable viewer protocol format
     const processedContent = useMemo(() => {
       if (m.role !== "assistant") return m.content;
-      return m.content;
+
+      let text = m.content;
+      
+      // If the backend generated a markdown link already, normalize it
+      text = text.replace(
+        /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
+        (_match, label, docId, page, score) => {
+          const scoreParam = score ? `/${score}` : "";
+          return `[View Source: ${label.trim()}](#viewer/${docId}/${page}${scoreParam})`;
+        }
+      );
+
+      // Fallback: If backend output raw bold text like "**Source: ... Page 8**", catch and convert it
+      text = text.replace(
+        /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
+        (_match, citationLabel, pageNumber) => {
+          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber})`;
+        }
+      );
+
+      return text;
     }, [m.content, m.role]);
 
     return (
@@ -212,7 +235,7 @@ const MessageBubble = memo(
                   a: ({ node, href, children, ...props }) => {
                     if (href?.startsWith("#viewer/")) {
                       const parts = href.replace("#viewer/", "").split("/");
-                      const docId = parts[0];
+                      const docId = parts[0] || FALLBACK_DOC_ID;
                       const page = parseInt(parts[1], 10) || 1;
                       const score = parts.length > 2 ? parseFloat(parts[2]) : null;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');

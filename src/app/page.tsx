@@ -16,7 +16,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import MixDesignCalculator from "@/components/MixDesignCalculator";
 import UnitConverter from "@/components/UnitConverter";
-import StandardSourceViewer from "@/components/StandardSourceViewer";
+import StandardSourceViewer from "@/components/StandardSourceViewer"; 
 
 type Message = {
   id: string;
@@ -40,8 +40,13 @@ type UploadStatus =
 type UploadType = "engineering" | "standard";
 
 // ------------------------------------------------------------
-// MESSAGE BUBBLE
+// MESSAGE BUBBLE & INTERCEPTOR
 // ------------------------------------------------------------
+
+const VIEWER_DOC_ID = "89ba6142-899d-408c-829b-f9634e2af7d2"; 
+
+// Matches: **Source: IS 10262:2009 — Clause 3.2.1.2 — Table 2 — Page 8**
+const SOURCE_CITATION_REGEX = /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/g;
 
 const MessageBubble = memo(
   ({
@@ -59,6 +64,21 @@ const MessageBubble = memo(
     onCopy: (messageId: string, content: string) => void;
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
+    
+    // Intercept the backend's plain "**Source: ... — Page N**" text and turn
+    // it into a markdown link using "#viewer/" so ReactMarkdown doesn't strip it.
+    const processedContent = useMemo(() => {
+      if (m.role !== "assistant") return m.content;
+
+      return m.content.replace(
+        SOURCE_CITATION_REGEX,
+        (_match, citationLabel: string, pageNumber: string) => {
+          const label = citationLabel.trim();
+          return `[View Source: ${label}](#viewer/${VIEWER_DOC_ID}/${pageNumber})`;
+        }
+      );
+    }, [m.content, m.role]);
+
     return (
       <div
         className={`group ${
@@ -134,9 +154,7 @@ const MessageBubble = memo(
                   ul: ({ node, ...props }) => (
                     <ul
                       className={`list-disc pl-5 mb-4 space-y-1.5 ${
-                        isDark
-                          ? "marker:text-slate-600"
-                          : "marker:text-slate-400"
+                        isDark ? "marker:text-slate-600" : "marker:text-slate-400"
                       }`}
                       {...props}
                     />
@@ -144,9 +162,7 @@ const MessageBubble = memo(
                   ol: ({ node, ...props }) => (
                     <ol
                       className={`list-decimal pl-5 mb-4 space-y-1.5 ${
-                        isDark
-                          ? "marker:text-slate-600"
-                          : "marker:text-slate-400"
+                        isDark ? "marker:text-slate-600" : "marker:text-slate-400"
                       }`}
                       {...props}
                     />
@@ -199,8 +215,8 @@ const MessageBubble = memo(
                   ),
                   // Sleek Aesthetic Link Component for Citations
                   a: ({ node, href, children, ...props }) => {
-                    if (href?.startsWith("viewer://")) {
-                      const parts = href.replace("viewer://", "").split("/");
+                    if (href?.startsWith("#viewer/")) {
+                      const parts = href.replace("#viewer/", "").split("/");
                       const docId = parts[0];
                       const page = parseInt(parts[1], 10) || 1;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
@@ -210,7 +226,7 @@ const MessageBubble = memo(
                           <button
                             type="button"
                             onClick={(e) => {
-                              e.preventDefault(); // STOP THE BROWSER FROM NAVIGATING
+                              e.preventDefault(); // STOP THE BROWSER FROM NAVIGATING OR REFRESHING
                               onOpenViewer(docId, page, "Document Source", citationText);
                             }}
                             className={`group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-105 active:scale-95 ${
@@ -257,8 +273,8 @@ const MessageBubble = memo(
                   },
                 }}
               >
-                {/* REMOVED REGEX HACK - PASS RAW CONTENT */}
-                {m.content}
+                {/* USE THE PROCESSED CONTENT HERE */}
+                {processedContent}
               </ReactMarkdown>
             )}
           </div>
@@ -271,7 +287,7 @@ const MessageBubble = memo(
           >
             <button
               type="button"
-              onClick={() => onCopy(m.id, m.content)}
+              onClick={() => onCopy(m.id, m.content)} // Copies raw content, not markdown hack
               className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all duration-200 ${
                 isCopied
                   ? isDark
@@ -748,6 +764,19 @@ export default function Chat() {
       // ------------------------------------------------------
       // DIRECT SUPABASE STORAGE UPLOAD
       // ------------------------------------------------------
+      //
+      // IMPORTANT:
+      // The PDF is uploaded directly from the browser to
+      // Supabase Storage. It never travels through Vercel's
+      // /api/upload request body, avoiding FUNCTION_PAYLOAD_TOO_LARGE.
+      //
+      // Storage path format:
+      // <user-id>/<random-id>-<safe-filename>.pdf
+      //
+      // The Storage RLS policy only allows the authenticated
+      // user to insert into the first-level folder matching
+      // their own user ID.
+      // ------------------------------------------------------
 
       const safeFilename = file.name
         .trim()
@@ -773,6 +802,10 @@ export default function Chat() {
 
       // ------------------------------------------------------
       // SERVER-SIDE PROCESSING
+      // ------------------------------------------------------
+      //
+      // Only a small JSON payload is now sent to /api/upload.
+      // The server downloads the PDF from private Storage.
       // ------------------------------------------------------
 
       const payload: {
@@ -890,6 +923,8 @@ export default function Chat() {
 
     let sessionId = activeSessionId;
 
+    // Create the DB session only when
+    // the first message is actually sent.
     if (!sessionId) {
       const {
         data: { user },
@@ -897,6 +932,7 @@ export default function Chat() {
 
       if (!user) {
         console.error("Cannot send message: user is not authenticated.");
+
         return;
       }
 
@@ -913,6 +949,7 @@ export default function Chat() {
 
       if (error || !newSession) {
         console.error("Failed to create chat session:", error);
+
         return;
       }
 

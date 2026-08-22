@@ -16,8 +16,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import MixDesignCalculator from "@/components/MixDesignCalculator";
 import UnitConverter from "@/components/UnitConverter";
-import StandardSourceViewer from "@/components/StandardSourceViewer"; // TEMPORARY TEST IMPORT
-
+import StandardSourceViewer from "@/components/StandardSourceViewer";
 
 type Message = {
   id: string;
@@ -51,22 +50,30 @@ const MessageBubble = memo(
     isDark,
     isCopied,
     onCopy,
+    onOpenViewer,
   }: {
     m: Message;
     isTyping?: boolean;
     isDark: boolean;
     isCopied: boolean;
-    onCopy: (
-      messageId: string,
-      content: string
-    ) => void;
+    onCopy: (messageId: string, content: string) => void;
+    onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
+    // Intercept "Source: ... Page X" text and transform it into a custom markdown link
+    // so ReactMarkdown can render it as a clickable viewer button.
+    const processedContent = useMemo(() => {
+      if (m.role !== 'assistant') return m.content;
+      return m.content.replace(/(?:\*\*?)?(Source:[^\n]*?Page\s+(\d+)[^\n]*)(?:\*\*?)?/gi, (match, p1, p2) => {
+        const cleanText = p1.replace(/\*/g, '').trim();
+        // Hardcoding the known IS 10262 doc ID for this frontend integration step
+        return `\n\n[${cleanText}](viewer://89ba6142-899d-408c-829b-f9634e2af7d2/${p2})\n\n`;
+      });
+    }, [m.content, m.role]);
+
     return (
       <div
         className={`group ${
-          m.role === "user"
-            ? "flex justify-end"
-            : "flex justify-start gap-4"
+          m.role === "user" ? "flex justify-end" : "flex justify-start gap-4"
         } mb-8`}
       >
         {/* Assistant icon */}
@@ -99,86 +106,45 @@ const MessageBubble = memo(
                       : "bg-[#f0f4f9] text-slate-800"
                   } px-5 py-3 rounded-[24px] rounded-br-sm`
                 : `text-[15px] leading-relaxed ${
-                    isDark
-                      ? "text-slate-300"
-                      : "text-slate-800"
-                  } ${
-                    isTyping
-                      ? "typing-cursor"
-                      : ""
-                  }`
+                    isDark ? "text-slate-300" : "text-slate-800"
+                  } ${isTyping ? "typing-cursor" : ""}`
             }`}
           >
             {m.role === "user" ? (
-              <div className="whitespace-pre-wrap">
-                {m.content}
-              </div>
+              <div className="whitespace-pre-wrap">{m.content}</div>
             ) : (
               <ReactMarkdown
-                remarkPlugins={[
-                  remarkMath,
-                  remarkGfm,
-                ]}
-                rehypePlugins={[
-                  rehypeKatex,
-                ]}
+                remarkPlugins={[remarkMath, remarkGfm]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
-                  h1: ({
-                    node,
-                    ...props
-                  }) => (
+                  h1: ({ node, ...props }) => (
                     <h1
                       className={`text-2xl font-semibold mt-6 mb-4 ${
-                        isDark
-                          ? "text-white"
-                          : "text-slate-900"
+                        isDark ? "text-white" : "text-slate-900"
                       }`}
                       {...props}
                     />
                   ),
-
-                  h2: ({
-                    node,
-                    ...props
-                  }) => (
+                  h2: ({ node, ...props }) => (
                     <h2
                       className={`text-xl font-semibold mt-5 mb-3 ${
-                        isDark
-                          ? "text-white"
-                          : "text-slate-900"
+                        isDark ? "text-white" : "text-slate-900"
                       }`}
                       {...props}
                     />
                   ),
-
-                  h3: ({
-                    node,
-                    ...props
-                  }) => (
+                  h3: ({ node, ...props }) => (
                     <h3
                       className={`text-lg font-medium mt-4 mb-2 ${
-                        isDark
-                          ? "text-white"
-                          : "text-slate-900"
+                        isDark ? "text-white" : "text-slate-900"
                       }`}
                       {...props}
                     />
                   ),
-
-                  p: ({
-                    node,
-                    ...props
-                  }) => (
-                    <p
-                      className="mb-4"
-                      {...props}
-                    />
+                  p: ({ node, ...props }) => (
+                    <p className="mb-4" {...props} />
                   ),
-
-                  ul: ({
-                    node,
-                    ...props
-                  }) => (
+                  ul: ({ node, ...props }) => (
                     <ul
                       className={`list-disc pl-5 mb-4 space-y-1.5 ${
                         isDark
@@ -188,11 +154,7 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-
-                  ol: ({
-                    node,
-                    ...props
-                  }) => (
+                  ol: ({ node, ...props }) => (
                     <ol
                       className={`list-decimal pl-5 mb-4 space-y-1.5 ${
                         isDark
@@ -202,30 +164,18 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-
-                  strong: ({
-                    node,
-                    ...props
-                  }) => (
+                  strong: ({ node, ...props }) => (
                     <strong
                       className={`font-semibold ${
-                        isDark
-                          ? "text-white"
-                          : "text-slate-900"
+                        isDark ? "text-white" : "text-slate-900"
                       }`}
                       {...props}
                     />
                   ),
-
-                  table: ({
-                    node,
-                    ...props
-                  }) => (
+                  table: ({ node, ...props }) => (
                     <div
                       className={`overflow-x-auto my-6 rounded-2xl border ${
-                        isDark
-                          ? "border-slate-700"
-                          : "border-slate-200"
+                        isDark ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
                       <table
@@ -234,11 +184,7 @@ const MessageBubble = memo(
                       />
                     </div>
                   ),
-
-                  thead: ({
-                    node,
-                    ...props
-                  }) => (
+                  thead: ({ node, ...props }) => (
                     <thead
                       className={`${
                         isDark
@@ -248,37 +194,92 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-
-                  th: ({
-                    node,
-                    ...props
-                  }) => (
+                  th: ({ node, ...props }) => (
                     <th
                       className={`py-2.5 px-4 font-medium whitespace-nowrap ${
-                        isDark
-                          ? "text-slate-300"
-                          : "text-slate-700"
+                        isDark ? "text-slate-300" : "text-slate-700"
                       }`}
                       {...props}
                     />
                   ),
-
-                  td: ({
-                    node,
-                    ...props
-                  }) => (
+                  td: ({ node, ...props }) => (
                     <td
                       className={`py-2.5 px-4 border-b ${
-                        isDark
-                          ? "border-slate-700/50"
-                          : "border-slate-100"
+                        isDark ? "border-slate-700/50" : "border-slate-100"
                       }`}
                       {...props}
                     />
                   ),
+                  // Custom Link Component for Citations
+                  a: ({ node, href, children, ...props }) => {
+                    if (href?.startsWith("viewer://")) {
+                      const parts = href.replace("viewer://", "").split("/");
+                      const docId = parts[0];
+                      const page = parseInt(parts[1], 10) || 1;
+                      const citationText = String(children);
+
+                      return (
+                        <span className="block mt-2 mb-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenViewer(
+                                docId,
+                                page,
+                                "IS Standard Document",
+                                citationText
+                              )
+                            }
+                            className={`group inline-flex items-center gap-2.5 px-4 py-2.5 rounded-[16px] text-[13px] font-semibold tracking-wide border transition-all duration-300 hover:shadow-md ${
+                              isDark
+                                ? "bg-[#1e1f20] border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-amber-400"
+                                : "bg-white border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-700 shadow-sm"
+                            }`}
+                          >
+                            <div
+                              className={`flex items-center justify-center w-6 h-6 rounded-md ${
+                                isDark
+                                  ? "bg-[#333537] group-hover:bg-amber-500/20 text-slate-400 group-hover:text-amber-400"
+                                  : "bg-slate-100 group-hover:bg-amber-50 text-slate-500 group-hover:text-amber-600"
+                              }`}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={2}
+                                stroke="currentColor"
+                                className="w-3.5 h-3.5"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                                />
+                              </svg>
+                            </div>
+                            <span className="truncate max-w-[220px] md:max-w-[400px]">
+                              {citationText.replace("Source:", "View Source:")}
+                            </span>
+                          </button>
+                        </span>
+                      );
+                    }
+                    return (
+                      <a
+                        href={href}
+                        className="text-blue-500 hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        {...props}
+                      >
+                        {children}
+                      </a>
+                    );
+                  },
                 }}
               >
-                {m.content}
+                {processedContent}
               </ReactMarkdown>
             )}
           </div>
@@ -286,19 +287,12 @@ const MessageBubble = memo(
           {/* COPY BUTTON */}
           <div
             className={`mt-1.5 flex ${
-              m.role === "user"
-                ? "justify-end"
-                : "justify-start"
+              m.role === "user" ? "justify-end" : "justify-start"
             }`}
           >
             <button
               type="button"
-              onClick={() =>
-                onCopy(
-                  m.id,
-                  m.content
-                )
-              }
+              onClick={() => onCopy(m.id, m.content)}
               className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all duration-200 ${
                 isCopied
                   ? isDark
@@ -308,17 +302,11 @@ const MessageBubble = memo(
                   ? "text-slate-500 hover:text-slate-300 hover:bg-[#1e1f20] opacity-0 group-hover:opacity-100"
                   : "text-slate-400 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100"
               }`}
-              aria-label={
-                isCopied
-                  ? "Copied"
-                  : "Copy message"
-              }
+              aria-label={isCopied ? "Copied" : "Copy message"}
             >
               <span
                 className={`inline-flex transition-transform duration-200 ${
-                  isCopied
-                    ? "scale-110"
-                    : "scale-100"
+                  isCopied ? "scale-110" : "scale-100"
                 }`}
               >
                 {isCopied ? (
@@ -345,14 +333,7 @@ const MessageBubble = memo(
                     stroke="currentColor"
                     className="w-3.5 h-3.5"
                   >
-                    <rect
-                      width="9"
-                      height="9"
-                      x="4"
-                      y="4"
-                      rx="1.5"
-                    />
-
+                    <rect width="9" height="9" x="4" y="4" rx="1.5" />
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -362,11 +343,7 @@ const MessageBubble = memo(
                 )}
               </span>
 
-              <span>
-                {isCopied
-                  ? "Copied"
-                  : "Copy"}
-              </span>
+              <span>{isCopied ? "Copied" : "Copy"}</span>
             </button>
           </div>
         </div>
@@ -375,8 +352,7 @@ const MessageBubble = memo(
   }
 );
 
-MessageBubble.displayName =
-  "MessageBubble";
+MessageBubble.displayName = "MessageBubble";
 
 // ------------------------------------------------------------
 // MAIN
@@ -385,86 +361,66 @@ MessageBubble.displayName =
 export default function Chat() {
   const router = useRouter();
 
-  const supabase = useMemo(
-    () => createClient(),
-    []
-  );
+  const supabase = useMemo(() => createClient(), []);
 
-  const [activeTab, setActiveTab] =
-    useState<
-      "chat" | "calculator" | "converter"
-    >("chat");
+  const [activeTab, setActiveTab] = useState<
+    "chat" | "calculator" | "converter"
+  >("chat");
 
-  const [isSidebarOpen, setIsSidebarOpen] =
-    useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [myInput, setMyInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(true);
+  const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadType, setUploadType] = useState<UploadType>("engineering");
+  const [standardIsNumber, setStandardIsNumber] = useState("");
+  const [standardEditionYear, setStandardEditionYear] = useState("");
+  const [standardTitle, setStandardTitle] = useState("");
 
-  const [isDarkMode, setIsDarkMode] =
-    useState(false);
-
-  const [isSettingsOpen, setIsSettingsOpen] =
-    useState(false);
-
-  const [sessions, setSessions] =
-    useState<Session[]>([]);
-
-  const [activeSessionId, setActiveSessionId] =
-    useState<string | null>(null);
-
-  const [messages, setMessages] =
-    useState<Message[]>([]);
-
-  const [myInput, setMyInput] =
-    useState("");
-
-  const [isLoading, setIsLoading] =
-    useState(false);
-
-  const [isUploading, setIsUploading] =
-    useState(false);
-
-  const [uploadStatus, setUploadStatus] =
-    useState<UploadStatus>(null);
-
-  const [isFetchingHistory, setIsFetchingHistory] =
-    useState(true);
-
-  const [uploadedPdfName, setUploadedPdfName] =
-    useState<string | null>(null);
-
-  const [showUploadDialog, setShowUploadDialog] =
-    useState(false);
-
-  const [uploadType, setUploadType] =
-    useState<UploadType>("engineering");
-
-  const [standardIsNumber, setStandardIsNumber] =
-    useState("");
-
-  const [standardEditionYear, setStandardEditionYear] =
-    useState("");
-
-  const [standardTitle, setStandardTitle] =
-    useState("");
-
-  // TEMPORARY TEST STATE
-  const [showTestViewer, setShowTestViewer] = useState(false);
+  // DYNAMIC VIEWER STATE
+  const [viewerState, setViewerState] = useState({
+    isOpen: false,
+    documentId: "",
+    page: 1,
+    title: "",
+    citation: "",
+  });
 
   // Keeps the upload type stable while the native file picker is open.
-  const uploadTypeRef =
-    useRef<UploadType>("engineering");
+  const uploadTypeRef = useRef<UploadType>("engineering");
 
   // Message ID currently displaying "Copied".
-  const [copiedMessageId, setCopiedMessageId] =
-    useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
-  const fileInputRef =
-    useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sessionLoadRef = useRef(0);
 
-  const messagesEndRef =
-    useRef<HTMLDivElement>(null);
-
-  const sessionLoadRef =
-    useRef(0);
+  // ------------------------------------------------------------
+  // DYNAMIC VIEWER HANDLER
+  // ------------------------------------------------------------
+  const openViewer = (
+    documentId: string,
+    page: number,
+    title: string,
+    citation: string
+  ) => {
+    setViewerState({
+      isOpen: true,
+      documentId,
+      page,
+      title,
+      citation,
+    });
+  };
 
   // ------------------------------------------------------------
   // SIDEBAR RESPONSIVENESS
@@ -472,10 +428,7 @@ export default function Chat() {
 
   useEffect(() => {
     const handleResize = () => {
-      if (
-        window.innerWidth <
-        768
-      ) {
+      if (window.innerWidth < 768) {
         setIsSidebarOpen(false);
       } else {
         setIsSidebarOpen(true);
@@ -484,16 +437,9 @@ export default function Chat() {
 
     handleResize();
 
-    window.addEventListener(
-      "resize",
-      handleResize
-    );
+    window.addEventListener("resize", handleResize);
 
-    return () =>
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // ------------------------------------------------------------
@@ -503,79 +449,50 @@ export default function Chat() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadChatHistory =
-      async () => {
-        setIsFetchingHistory(
-          true
-        );
+    const loadChatHistory = async () => {
+      setIsFetchingHistory(true);
 
-        const {
-          data: { user },
-        } =
-          await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        if (!user || cancelled) {
-          if (!cancelled) {
-            setIsFetchingHistory(
-              false
-            );
-          }
-
-          return;
+      if (!user || cancelled) {
+        if (!cancelled) {
+          setIsFetchingHistory(false);
         }
 
-        const {
-          data: allSessions,
-          error,
-        } =
-          await supabase
-            .from(
-              "chat_sessions"
-            )
-            .select(
-              "id, title, created_at"
-            )
-            .eq(
-              "user_id",
-              user.id
-            )
-            .order(
-              "created_at",
-              {
-                ascending: false,
-              }
-            );
+        return;
+      }
 
-        if (cancelled) {
-          return;
-        }
+      const { data: allSessions, error } = await supabase
+        .from("chat_sessions")
+        .select("id, title, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        });
 
-        if (error) {
-          console.error(
-            "Failed to load sessions:",
-            error
-          );
+      if (cancelled) {
+        return;
+      }
 
-          setSessions([]);
-          setIsFetchingHistory(
-            false
-          );
+      if (error) {
+        console.error("Failed to load sessions:", error);
 
-          return;
-        }
+        setSessions([]);
+        setIsFetchingHistory(false);
 
-        // User starts with a fresh unsaved chat.
-        setSessions(
-          allSessions || []
-        );
+        return;
+      }
 
-        setActiveSessionId(null);
-        setMessages([]);
+      // User starts with a fresh unsaved chat.
+      setSessions(allSessions || []);
 
-        setIsFetchingHistory(
-          false
-        );
-      };
+      setActiveSessionId(null);
+      setMessages([]);
+
+      setIsFetchingHistory(false);
+    };
 
     loadChatHistory();
 
@@ -588,225 +505,159 @@ export default function Chat() {
   // LOAD SPECIFIC CHAT
   // ------------------------------------------------------------
 
-  const loadSpecificSession =
-    async (
-      sessionId: string
-    ) => {
-      if (isLoading) {
-        return;
-      }
+  const loadSpecificSession = async (sessionId: string) => {
+    if (isLoading) {
+      return;
+    }
 
-      const requestId =
-        ++sessionLoadRef.current;
+    const requestId = ++sessionLoadRef.current;
 
-      if (
-        window.innerWidth <
-        768
-      ) {
-        setIsSidebarOpen(false);
-      }
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
 
-      setActiveTab("chat");
+    setActiveTab("chat");
 
-      setActiveSessionId(
-        sessionId
-      );
+    setActiveSessionId(sessionId);
 
-      setIsFetchingHistory(
-        true
-      );
+    setIsFetchingHistory(true);
+
+    setMessages([]);
+
+    const { data, error } = await supabase
+      .from("messages")
+      .select("id, role, content")
+      .eq("session_id", sessionId)
+      .order("created_at", {
+        ascending: true,
+      });
+
+    if (requestId !== sessionLoadRef.current) {
+      return;
+    }
+
+    if (error) {
+      console.error("Failed to load session:", error);
 
       setMessages([]);
+    } else {
+      setMessages((data || []) as Message[]);
+    }
 
-      const {
-        data,
-        error,
-      } =
-        await supabase
-          .from("messages")
-          .select(
-            "id, role, content"
-          )
-          .eq(
-            "session_id",
-            sessionId
-          )
-          .order(
-            "created_at",
-            {
-              ascending: true,
-            }
-          );
-
-      if (
-        requestId !==
-        sessionLoadRef.current
-      ) {
-        return;
-      }
-
-      if (error) {
-        console.error(
-          "Failed to load session:",
-          error
-        );
-
-        setMessages([]);
-      } else {
-        setMessages(
-          (data ||
-            []) as Message[]
-        );
-      }
-
-      setIsFetchingHistory(
-        false
-      );
-    };
+    setIsFetchingHistory(false);
+  };
 
   // ------------------------------------------------------------
   // COPY MESSAGE
   // ------------------------------------------------------------
 
-  const handleCopyMessage =
-    async (
-      messageId: string,
-      content: string
-    ) => {
-      const markCopied = () => {
-        setCopiedMessageId(messageId);
+  const handleCopyMessage = async (messageId: string, content: string) => {
+    const markCopied = () => {
+      setCopiedMessageId(messageId);
 
-        window.setTimeout(() => {
-          setCopiedMessageId((current) =>
-            current === messageId ? null : current
-          );
-        }, 1800);
-      };
-
-      try {
-        // Preferred path for secure contexts.
-        if (
-          typeof navigator !== "undefined" &&
-          navigator.clipboard &&
-          window.isSecureContext
-        ) {
-          await navigator.clipboard.writeText(content);
-          markCopied();
-          return;
-        }
-
-        // Fallback for browsers/preview environments where the
-        // Clipboard API is unavailable or blocked.
-        const textarea =
-          document.createElement("textarea");
-
-        textarea.value = content;
-        textarea.setAttribute("readonly", "");
-        textarea.style.position = "fixed";
-        textarea.style.left = "-9999px";
-        textarea.style.top = "0";
-        textarea.style.opacity = "0";
-
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        textarea.setSelectionRange(
-          0,
-          textarea.value.length
+      window.setTimeout(() => {
+        setCopiedMessageId((current) =>
+          current === messageId ? null : current
         );
-
-        const copied =
-          document.execCommand("copy");
-
-        document.body.removeChild(textarea);
-
-        if (!copied) {
-          throw new Error(
-            "The browser blocked the copy operation."
-          );
-        }
-
-        markCopied();
-      } catch (error) {
-        console.error(
-          "Failed to copy message:",
-          error
-        );
-
-        window.setTimeout(() => {
-          window.alert(
-            "Copy was blocked by the browser. Please select the message and press Ctrl/Cmd+C."
-          );
-        }, 0);
-      }
+      }, 1800);
     };
+
+    try {
+      // Preferred path for secure contexts.
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(content);
+        markCopied();
+        return;
+      }
+
+      // Fallback for browsers/preview environments where the
+      // Clipboard API is unavailable or blocked.
+      const textarea = document.createElement("textarea");
+
+      textarea.value = content;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      textarea.style.opacity = "0";
+
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+
+      const copied = document.execCommand("copy");
+
+      document.body.removeChild(textarea);
+
+      if (!copied) {
+        throw new Error("The browser blocked the copy operation.");
+      }
+
+      markCopied();
+    } catch (error) {
+      console.error("Failed to copy message:", error);
+
+      window.setTimeout(() => {
+        window.alert(
+          "Copy was blocked by the browser. Please select the message and press Ctrl/Cmd+C."
+        );
+      }, 0);
+    }
+  };
 
   // ------------------------------------------------------------
   // AUTO SCROLL
   // ------------------------------------------------------------
 
   useEffect(() => {
-    if (
-      activeTab === "chat"
-    ) {
-      messagesEndRef.current?.scrollIntoView(
-        {
-          behavior: "smooth",
-        }
-      );
+    if (activeTab === "chat") {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+      });
     }
-  }, [
-    messages,
-    activeTab,
-  ]);
+  }, [messages, activeTab]);
 
   // ------------------------------------------------------------
   // LOGOUT
   // ------------------------------------------------------------
 
-  const handleLogout =
-    async () => {
-      await supabase.auth.signOut();
-      router.push("/login");
-    };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   // ------------------------------------------------------------
   // NEW CHAT
   // ------------------------------------------------------------
 
-  const handleNewChat =
-    () => {
-      if (isLoading) {
-        return;
-      }
+  const handleNewChat = () => {
+    if (isLoading) {
+      return;
+    }
 
-      sessionLoadRef.current += 1;
+    sessionLoadRef.current += 1;
 
-      setActiveSessionId(
-        null
-      );
+    setActiveSessionId(null);
 
-      setMessages([]);
+    setMessages([]);
 
-      setMyInput("");
+    setMyInput("");
 
-      setActiveTab("chat");
+    setActiveTab("chat");
 
-      setIsFetchingHistory(
-        false
-      );
+    setIsFetchingHistory(false);
 
-      setCopiedMessageId(
-        null
-      );
+    setCopiedMessageId(null);
 
-      if (
-        window.innerWidth <
-        768
-      ) {
-        setIsSidebarOpen(false);
-      }
-    };
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  };
 
   // ------------------------------------------------------------
   // UPLOAD DIALOG / PDF UPLOAD
@@ -832,15 +683,11 @@ export default function Chat() {
   };
 
   const chooseStandardPdf = () => {
-    const normalizedIsNumber =
-      standardIsNumber.trim();
+    const normalizedIsNumber = standardIsNumber.trim();
 
-    const normalizedTitle =
-      standardTitle.trim();
+    const normalizedTitle = standardTitle.trim();
 
-    const year = Number(
-      standardEditionYear
-    );
+    const year = Number(standardEditionYear);
 
     if (!normalizedIsNumber) {
       setUploadStatus({
@@ -850,11 +697,7 @@ export default function Chat() {
       return;
     }
 
-    if (
-      !Number.isInteger(year) ||
-      year < 1900 ||
-      year > 2100
-    ) {
+    if (!Number.isInteger(year) || year < 1900 || year > 2100) {
       setUploadStatus({
         type: "error",
         message: "Enter a valid edition year.",
@@ -879,515 +722,378 @@ export default function Chat() {
     }, 0);
   };
 
-  const handleFileUpload =
-    async (
-      e: React.ChangeEvent<HTMLInputElement>
-    ) => {
-      const file =
-        e.target.files?.[0];
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
 
-      if (!file) {
-        return;
+    if (!file) {
+      return;
+    }
+
+    const currentUploadType = uploadTypeRef.current;
+
+    setIsUploading(true);
+    setUploadStatus(null);
+
+    try {
+      // ------------------------------------------------------
+      // AUTHENTICATED USER
+      // ------------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        throw userError;
       }
 
-      const currentUploadType =
-        uploadTypeRef.current;
+      if (!user) {
+        throw new Error("You must be signed in to upload a PDF.");
+      }
 
-      setIsUploading(true);
-      setUploadStatus(null);
+      // ------------------------------------------------------
+      // PDF VALIDATION
+      // ------------------------------------------------------
+
+      const isPdf =
+        file.type === "application/pdf" ||
+        file.name.toLowerCase().endsWith(".pdf");
+
+      if (!isPdf) {
+        throw new Error("Only PDF files are supported.");
+      }
+
+      // ------------------------------------------------------
+      // DIRECT SUPABASE STORAGE UPLOAD
+      // ------------------------------------------------------
+      //
+      // IMPORTANT:
+      // The PDF is uploaded directly from the browser to
+      // Supabase Storage. It never travels through Vercel's
+      // /api/upload request body, avoiding FUNCTION_PAYLOAD_TOO_LARGE.
+      //
+      // Storage path format:
+      // <user-id>/<random-id>-<safe-filename>.pdf
+      //
+      // The Storage RLS policy only allows the authenticated
+      // user to insert into the first-level folder matching
+      // their own user ID.
+      // ------------------------------------------------------
+
+      const safeFilename = file.name
+        .trim()
+        .replace(/[^a-zA-Z0-9._-]+/g, "-")
+        .replace(/-+/g, "-");
+
+      const storagePath = `${user.id}/${crypto.randomUUID()}-${
+        safeFilename || "document.pdf"
+      }`;
+
+      const { error: storageUploadError } = await supabase.storage
+        .from("civilgpt-pdfs")
+        .upload(storagePath, file, {
+          contentType: "application/pdf",
+          upsert: false,
+        });
+
+      if (storageUploadError) {
+        throw new Error(
+          `Storage upload failed: ${storageUploadError.message}`
+        );
+      }
+
+      // ------------------------------------------------------
+      // SERVER-SIDE PROCESSING
+      // ------------------------------------------------------
+      //
+      // Only a small JSON payload is now sent to /api/upload.
+      // The server downloads the PDF from private Storage.
+      // ------------------------------------------------------
+
+      const payload: {
+        storagePath: string;
+        filename: string;
+        uploadType: UploadType;
+        isNumber?: string;
+        editionYear?: string;
+        title?: string;
+      } = {
+        storagePath,
+        filename: file.name,
+        uploadType: currentUploadType,
+      };
+
+      if (currentUploadType === "standard") {
+        payload.isNumber = standardIsNumber.trim();
+
+        payload.editionYear = standardEditionYear.trim();
+
+        payload.title = standardTitle.trim();
+      }
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await res.text();
+
+      let data: any = null;
 
       try {
-        // ------------------------------------------------------
-        // AUTHENTICATED USER
-        // ------------------------------------------------------
-
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) {
-          throw userError;
-        }
-
-        if (!user) {
-          throw new Error(
-            "You must be signed in to upload a PDF."
-          );
-        }
-
-        // ------------------------------------------------------
-        // PDF VALIDATION
-        // ------------------------------------------------------
-
-        const isPdf =
-          file.type ===
-            "application/pdf" ||
-          file.name
-            .toLowerCase()
-            .endsWith(".pdf");
-
-        if (!isPdf) {
-          throw new Error(
-            "Only PDF files are supported."
-          );
-        }
-
-        // ------------------------------------------------------
-        // DIRECT SUPABASE STORAGE UPLOAD
-        // ------------------------------------------------------
-        //
-        // IMPORTANT:
-        // The PDF is uploaded directly from the browser to
-        // Supabase Storage. It never travels through Vercel's
-        // /api/upload request body, avoiding FUNCTION_PAYLOAD_TOO_LARGE.
-        //
-        // Storage path format:
-        // <user-id>/<random-id>-<safe-filename>.pdf
-        //
-        // The Storage RLS policy only allows the authenticated
-        // user to insert into the first-level folder matching
-        // their own user ID.
-        // ------------------------------------------------------
-
-        const safeFilename = file.name
-          .trim()
-          .replace(/[^a-zA-Z0-9._-]+/g, "-")
-          .replace(/-+/g, "-");
-
-        const storagePath =
-          `${user.id}/${crypto.randomUUID()}-${safeFilename || "document.pdf"}`;
-
-        const {
-          error: storageUploadError,
-        } = await supabase.storage
-          .from("civilgpt-pdfs")
-          .upload(
-            storagePath,
-            file,
-            {
-              contentType:
-                "application/pdf",
-              upsert: false,
-            }
-          );
-
-        if (storageUploadError) {
-          throw new Error(
-            `Storage upload failed: ${storageUploadError.message}`
-          );
-        }
-
-        // ------------------------------------------------------
-        // SERVER-SIDE PROCESSING
-        // ------------------------------------------------------
-        //
-        // Only a small JSON payload is now sent to /api/upload.
-        // The server downloads the PDF from private Storage.
-        // ------------------------------------------------------
-
-        const payload: {
-          storagePath: string;
-          filename: string;
-          uploadType: UploadType;
-          isNumber?: string;
-          editionYear?: string;
-          title?: string;
-        } = {
-          storagePath,
-          filename: file.name,
-          uploadType: currentUploadType,
-        };
-
-        if (
-          currentUploadType ===
-          "standard"
-        ) {
-          payload.isNumber =
-            standardIsNumber.trim();
-
-          payload.editionYear =
-            standardEditionYear.trim();
-
-          payload.title =
-            standardTitle.trim();
-        }
-
-        const res =
-          await fetch(
-            "/api/upload",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify(
-                payload
-              ),
-            }
-          );
-
-        const responseText =
-          await res.text();
-
-        let data: any = null;
-
-        try {
-          data = responseText
-            ? JSON.parse(responseText)
-            : null;
-        } catch {
-          throw new Error(
-            responseText ||
-              `Upload request failed with status ${res.status}.`
-          );
-        }
-
-        if (!res.ok) {
-          throw new Error(
-            data?.error ||
-              `Upload request failed with status ${res.status}.`
-          );
-        }
-
-        setUploadedPdfName(
-          data.filename ||
-            file.name
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        throw new Error(
+          responseText || `Upload request failed with status ${res.status}.`
         );
-
-        if (data.duplicate) {
-          setUploadStatus({
-            type: "success",
-            message:
-              currentUploadType ===
-              "standard"
-                ? "This IS Standard PDF is already in your standards library."
-                : "This PDF is already in your knowledge base.",
-          });
-        } else {
-          setUploadStatus({
-            type: "success",
-            message:
-              currentUploadType ===
-              "standard"
-                ? "IS Standard prepared for batch embedding."
-                : "PDF Memorized.",
-          });
-        }
-
-        setTimeout(() => {
-          setUploadStatus(null);
-        }, 4500);
-      } catch (error) {
-        console.error(
-          "PDF upload failed:",
-          error
-        );
-
-        setUploadStatus({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to process PDF.",
-        });
-      } finally {
-        setIsUploading(false);
-
-        if (
-          fileInputRef.current
-        ) {
-          fileInputRef.current.value =
-            "";
-        }
       }
-    };
+
+      if (!res.ok) {
+        throw new Error(
+          data?.error || `Upload request failed with status ${res.status}.`
+        );
+      }
+
+      setUploadedPdfName(data.filename || file.name);
+
+      if (data.duplicate) {
+        setUploadStatus({
+          type: "success",
+          message:
+            currentUploadType === "standard"
+              ? "This IS Standard PDF is already in your standards library."
+              : "This PDF is already in your knowledge base.",
+        });
+      } else {
+        setUploadStatus({
+          type: "success",
+          message:
+            currentUploadType === "standard"
+              ? "IS Standard prepared for batch embedding."
+              : "PDF Memorized.",
+        });
+      }
+
+      setTimeout(() => {
+        setUploadStatus(null);
+      }, 4500);
+    } catch (error) {
+      console.error("PDF upload failed:", error);
+
+      setUploadStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to process PDF.",
+      });
+    } finally {
+      setIsUploading(false);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   // ------------------------------------------------------------
   // REMOVE PDF VISUAL CHIP
   // ------------------------------------------------------------
 
-  const removePdfAttachment =
-    () => {
-      setUploadedPdfName(null);
-      setUploadStatus(null);
-    };
+  const removePdfAttachment = () => {
+    setUploadedPdfName(null);
+    setUploadStatus(null);
+  };
 
   // ------------------------------------------------------------
   // SEND MESSAGE
   // ------------------------------------------------------------
 
-  const customHandleSubmit =
-    async (
-      e?: React.FormEvent
-    ) => {
-      if (e) {
-        e.preventDefault();
-      }
+  const customHandleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
 
-      const input =
-        myInput.trim();
+    const input = myInput.trim();
 
-      if (
-        !input ||
-        isLoading
-      ) {
+    if (!input || isLoading) {
+      return;
+    }
+
+    let sessionId = activeSessionId;
+
+    // Create the DB session only when
+    // the first message is actually sent.
+    if (!sessionId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        console.error("Cannot send message: user is not authenticated.");
+
         return;
       }
 
-      let sessionId =
-        activeSessionId;
+      const { data: newSession, error } = await supabase
+        .from("chat_sessions")
+        .insert([
+          {
+            user_id: user.id,
+            title: "New Engineering Chat",
+          },
+        ])
+        .select("id, title, created_at")
+        .single();
 
-      // Create the DB session only when
-      // the first message is actually sent.
-      if (!sessionId) {
-        const {
-          data: { user },
-        } =
-          await supabase.auth.getUser();
+      if (error || !newSession) {
+        console.error("Failed to create chat session:", error);
 
-        if (!user) {
-          console.error(
-            "Cannot send message: user is not authenticated."
-          );
-
-          return;
-        }
-
-        const {
-          data: newSession,
-          error,
-        } =
-          await supabase
-            .from(
-              "chat_sessions"
-            )
-            .insert([
-              {
-                user_id:
-                  user.id,
-                title:
-                  "New Engineering Chat",
-              },
-            ])
-            .select(
-              "id, title, created_at"
-            )
-            .single();
-
-        if (
-          error ||
-          !newSession
-        ) {
-          console.error(
-            "Failed to create chat session:",
-            error
-          );
-
-          return;
-        }
-
-        sessionId =
-          newSession.id;
-
-        setSessions(
-          (prev) => [
-            newSession,
-            ...prev,
-          ]
-        );
-
-        setActiveSessionId(
-          newSession.id
-        );
-
-        sessionLoadRef.current += 1;
+        return;
       }
 
-      const userMsg: Message =
-        {
-          id:
-            crypto.randomUUID(),
-          role: "user",
-          content: input,
-        };
+      sessionId = newSession.id;
 
-      const aiMsgId =
-        crypto.randomUUID();
+      setSessions((prev) => [newSession, ...prev]);
 
-      setMessages(
-        (prev) => [
-          ...prev,
-          userMsg,
-          {
-            id: aiMsgId,
-            role: "assistant",
-            content: "",
-          },
-        ]
+      setActiveSessionId(newSession.id);
+
+      sessionLoadRef.current += 1;
+    }
+
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: input,
+    };
+
+    const aiMsgId = crypto.randomUUID();
+
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      {
+        id: aiMsgId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+
+    setMyInput("");
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMsg],
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === aiMsgId
+              ? {
+                  ...message,
+                  content: `⚠️ ${errorText}`,
+                }
+              : message
+          )
+        );
+
+        return;
+      }
+
+      if (!response.body) {
+        throw new Error("Response body is empty.");
+      }
+
+      const reader = response.body.getReader();
+
+      const decoder = new TextDecoder();
+
+      let currentAiText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        currentAiText += decoder.decode(value, {
+          stream: true,
+        });
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === aiMsgId
+              ? {
+                  ...message,
+                  content: currentAiText,
+                }
+              : message
+          )
+        );
+      }
+
+      currentAiText += decoder.decode();
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === aiMsgId
+            ? {
+                ...message,
+                content: currentAiText,
+              }
+            : message
+        )
       );
 
-      setMyInput("");
+      const shortTitle =
+        input.length > 25 ? `${input.substring(0, 25)}...` : input;
 
-      setIsLoading(true);
-
-      try {
-        const response =
-          await fetch(
-            "/api/chat",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                messages: [
-                  ...messages,
-                  userMsg,
-                ],
-                sessionId,
-              }),
-            }
-          );
-
-        if (!response.ok) {
-          const errorText =
-            await response.text();
-
-          setMessages(
-            (prev) =>
-              prev.map(
-                (message) =>
-                  message.id ===
-                  aiMsgId
-                    ? {
-                        ...message,
-                        content:
-                          `⚠️ ${errorText}`,
-                      }
-                    : message
-              )
-          );
-
-          return;
-        }
-
-        if (!response.body) {
-          throw new Error(
-            "Response body is empty."
-          );
-        }
-
-        const reader =
-          response.body.getReader();
-
-        const decoder =
-          new TextDecoder();
-
-        let currentAiText =
-          "";
-
-        while (true) {
-          const {
-            done,
-            value,
-          } =
-            await reader.read();
-
-          if (done) {
-            break;
-          }
-
-          currentAiText +=
-            decoder.decode(
-              value,
-              {
-                stream: true,
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                title: shortTitle,
               }
-            );
+            : session
+        )
+      );
+    } catch (error) {
+      console.error("Chat stream failed:", error);
 
-          setMessages(
-            (prev) =>
-              prev.map(
-                (message) =>
-                  message.id ===
-                  aiMsgId
-                    ? {
-                        ...message,
-                        content:
-                          currentAiText,
-                      }
-                    : message
-              )
-          );
-        }
-
-        currentAiText +=
-          decoder.decode();
-
-        setMessages(
-          (prev) =>
-            prev.map(
-              (message) =>
-                message.id ===
-                aiMsgId
-                  ? {
-                      ...message,
-                      content:
-                        currentAiText,
-                    }
-                  : message
-            )
-        );
-
-        const shortTitle =
-          input.length > 25
-            ? `${input.substring(
-                0,
-                25
-              )}...`
-            : input;
-
-        setSessions(
-          (prev) =>
-            prev.map(
-              (session) =>
-                session.id ===
-                sessionId
-                  ? {
-                      ...session,
-                      title:
-                        shortTitle,
-                    }
-                  : session
-            )
-        );
-      } catch (error) {
-        console.error(
-          "Chat stream failed:",
-          error
-        );
-
-        setMessages(
-          (prev) =>
-            prev.map(
-              (message) =>
-                message.id ===
-                aiMsgId
-                  ? {
-                      ...message,
-                      content:
-                        "⚠️ Stream failed.",
-                    }
-                  : message
-            )
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === aiMsgId
+            ? {
+                ...message,
+                content: "⚠️ Stream failed.",
+              }
+            : message
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // ------------------------------------------------------------
   // RENDER
@@ -1396,19 +1102,13 @@ export default function Chat() {
   return (
     <div
       className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${
-        isDarkMode
-          ? "bg-[#131314] text-slate-200"
-          : "bg-white text-slate-800"
+        isDarkMode ? "bg-[#131314] text-slate-200" : "bg-white text-slate-800"
       }`}
     >
       {/* SIDEBAR TOGGLE */}
 
       <button
-        onClick={() =>
-          setIsSidebarOpen(
-            !isSidebarOpen
-          )
-        }
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         className={`fixed top-3 left-3 z-[60] p-2.5 rounded-full transition-colors ${
           isDarkMode
             ? "hover:bg-[#333537] text-slate-400"
@@ -1437,9 +1137,7 @@ export default function Chat() {
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity"
-          onClick={() =>
-            setIsSidebarOpen(false)
-          }
+          onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
@@ -1447,9 +1145,7 @@ export default function Chat() {
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 flex flex-col ${
-          isDarkMode
-            ? "bg-[#1e1f20]"
-            : "bg-[#f0f4f9]"
+          isDarkMode ? "bg-[#1e1f20]" : "bg-[#f0f4f9]"
         } ${
           isSidebarOpen
             ? "w-[260px] translate-x-0"
@@ -1463,9 +1159,7 @@ export default function Chat() {
 
           <span
             className={`text-[18px] font-medium tracking-wide select-none whitespace-nowrap overflow-hidden transition-all duration-300 ${
-              isDarkMode
-                ? "text-slate-300"
-                : "text-slate-700"
+              isDarkMode ? "text-slate-300" : "text-slate-700"
             } ${
               isSidebarOpen
                 ? "opacity-100 max-w-[120px]"
@@ -1480,9 +1174,7 @@ export default function Chat() {
 
         <div className="px-3 py-2 shrink-0 relative group flex justify-center md:justify-start">
           <button
-            onClick={
-              handleNewChat
-            }
+            onClick={handleNewChat}
             disabled={isLoading}
             className={`flex items-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
               isDarkMode
@@ -1541,11 +1233,7 @@ export default function Chat() {
               isSidebarOpen
                 ? "max-w-[100px] opacity-100"
                 : "max-w-0 opacity-0 h-0 m-0"
-            } ${
-              isDarkMode
-                ? "text-slate-500"
-                : "text-slate-500"
-            }`}
+            } ${isDarkMode ? "text-slate-500" : "text-slate-500"}`}
           >
             Tools
           </h3>
@@ -1553,22 +1241,14 @@ export default function Chat() {
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
               onClick={() => {
-                setActiveTab(
-                  "chat"
-                );
+                setActiveTab("chat");
 
-                if (
-                  window.innerWidth <
-                  768
-                ) {
-                  setIsSidebarOpen(
-                    false
-                  );
+                if (window.innerWidth < 768) {
+                  setIsSidebarOpen(false);
                 }
               }}
               className={`flex items-center rounded-full transition-colors ${
-                activeTab ===
-                "chat"
+                activeTab === "chat"
                   ? isDarkMode
                     ? "bg-[#333537] text-amber-400 font-medium"
                     : "bg-[#dce0e3] text-slate-900 font-medium"
@@ -1612,22 +1292,14 @@ export default function Chat() {
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
               onClick={() => {
-                setActiveTab(
-                  "calculator"
-                );
+                setActiveTab("calculator");
 
-                if (
-                  window.innerWidth <
-                  768
-                ) {
-                  setIsSidebarOpen(
-                    false
-                  );
+                if (window.innerWidth < 768) {
+                  setIsSidebarOpen(false);
                 }
               }}
               className={`flex items-center rounded-full transition-colors ${
-                activeTab ===
-                "calculator"
+                activeTab === "calculator"
                   ? isDarkMode
                     ? "bg-[#333537] text-slate-100 font-medium"
                     : "bg-[#dce0e3] text-slate-900 font-medium"
@@ -1671,22 +1343,14 @@ export default function Chat() {
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
               onClick={() => {
-                setActiveTab(
-                  "converter"
-                );
+                setActiveTab("converter");
 
-                if (
-                  window.innerWidth <
-                  768
-                ) {
-                  setIsSidebarOpen(
-                    false
-                  );
+                if (window.innerWidth < 768) {
+                  setIsSidebarOpen(false);
                 }
               }}
               className={`flex items-center rounded-full transition-colors ${
-                activeTab ===
-                "converter"
+                activeTab === "converter"
                   ? isDarkMode
                     ? "bg-[#333537] text-slate-100 font-medium"
                     : "bg-[#dce0e3] text-slate-900 font-medium"
@@ -1726,20 +1390,6 @@ export default function Chat() {
               </div>
             )}
           </div>
-
-          {/* TEMPORARY VIEWER TEST BUTTON */}
-          <div className="relative group w-full flex justify-center md:justify-start mt-4 border-t border-slate-700/30 pt-3">
-            <button
-              onClick={() => setShowTestViewer(true)}
-              className={`flex items-center rounded-full transition-colors ${isDarkMode ? "bg-rose-900/20 text-rose-400 border border-rose-900/50" : "bg-rose-50 text-rose-600 border border-rose-100"} ${isSidebarOpen ? "w-full py-2 px-3" : "h-[40px] w-[40px] justify-center px-0"}`}
-              title="Test Viewer Modal"
-            >
-              <span className="w-5 flex justify-center shrink-0 text-sm">🧪</span>
-              <span className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 font-medium ${isSidebarOpen ? "ml-3 opacity-100 max-w-[200px]" : "w-0 opacity-0 ml-0 max-w-0"}`}>
-                Test Viewer
-              </span>
-            </button>
-          </div>
         </div>
 
         {/* HISTORY */}
@@ -1750,101 +1400,77 @@ export default function Chat() {
               isSidebarOpen
                 ? "max-w-[100px] opacity-100"
                 : "max-w-0 opacity-0 h-0 m-0"
-            } ${
-              isDarkMode
-                ? "text-slate-500"
-                : "text-slate-500"
-            }`}
+            } ${isDarkMode ? "text-slate-500" : "text-slate-500"}`}
           >
             Recent
           </h3>
 
-          {sessions.length ===
-            0 &&
-          !isFetchingHistory &&
-          isSidebarOpen ? (
+          {sessions.length === 0 && !isFetchingHistory && isSidebarOpen ? (
             <div className="text-slate-500 text-[13px] px-3 mt-2 whitespace-nowrap">
               No previous chats.
             </div>
           ) : (
-            sessions.map(
-              (session) => (
-                <div
-                  key={
-                    session.id
-                  }
-                  className="relative group w-full flex justify-center md:justify-start"
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                className="relative group w-full flex justify-center md:justify-start"
+              >
+                <button
+                  onClick={() => loadSpecificSession(session.id)}
+                  disabled={isLoading}
+                  className={`flex items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    activeSessionId === session.id && activeTab === "chat"
+                      ? isDarkMode
+                        ? "bg-[#333537] text-slate-200"
+                        : "bg-[#dce0e3] text-slate-900 font-medium"
+                      : isDarkMode
+                      ? "text-slate-400 hover:bg-[#333537]"
+                      : "text-slate-600 hover:bg-[#e8eaed]"
+                  } ${
+                    isSidebarOpen
+                      ? "w-full py-2 px-3"
+                      : "h-[40px] w-[40px] justify-center px-0"
+                  }`}
                 >
-                  <button
-                    onClick={() =>
-                      loadSpecificSession(
-                        session.id
-                      )
-                    }
-                    disabled={
-                      isLoading
-                    }
-                    className={`flex items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      activeSessionId ===
-                        session.id &&
-                      activeTab ===
-                        "chat"
-                        ? isDarkMode
-                          ? "bg-[#333537] text-slate-200"
-                          : "bg-[#dce0e3] text-slate-900 font-medium"
-                        : isDarkMode
-                        ? "text-slate-400 hover:bg-[#333537]"
-                        : "text-slate-600 hover:bg-[#e8eaed]"
-                    } ${
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-[18px] h-[18px] shrink-0 opacity-70"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z"
+                    />
+                  </svg>
+
+                  <span
+                    className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
                       isSidebarOpen
-                        ? "w-full py-2 px-3"
-                        : "h-[40px] w-[40px] justify-center px-0"
+                        ? "ml-3 opacity-100 max-w-[150px]"
+                        : "max-w-0 opacity-0 ml-0"
                     }`}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={
-                        1.5
-                      }
-                      stroke="currentColor"
-                      className="w-[18px] h-[18px] shrink-0 opacity-70"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.436 3 11.996c0 2.29.982 4.367 2.584 5.86.32.298.54.69.58 1.102l.27 2.842a.8.8 0 0 0 1.25.59l2.76-1.74a.8.8 0 0 1 .45-.14 9.1 9.1 0 0 0 1.1.07Z"
-                      />
-                    </svg>
+                    {session.title || "Workspace"}
+                  </span>
+                </button>
 
-                    <span
-                      className={`text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
-                        isSidebarOpen
-                          ? "ml-3 opacity-100 max-w-[150px]"
-                          : "max-w-0 opacity-0 ml-0"
-                      }`}
-                    >
-                      {session.title ||
-                        "Workspace"}
-                    </span>
-                  </button>
-
-                  {!isSidebarOpen && (
-                    <div
-                      className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
-                        isDarkMode
-                          ? "bg-slate-700 text-white"
-                          : "bg-slate-800 text-white"
-                      }`}
-                    >
-                      {session.title ||
-                        "Workspace"}
-                    </div>
-                  )}
-                </div>
-              )
-            )
+                {!isSidebarOpen && (
+                  <div
+                    className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
+                      isDarkMode
+                        ? "bg-slate-700 text-white"
+                        : "bg-slate-800 text-white"
+                    }`}
+                  >
+                    {session.title || "Workspace"}
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </div>
 
@@ -1854,11 +1480,7 @@ export default function Chat() {
           {isSettingsOpen && (
             <div
               className="fixed inset-0 z-[90]"
-              onClick={() =>
-                setIsSettingsOpen(
-                  false
-                )
-              }
+              onClick={() => setIsSettingsOpen(false)}
             />
           )}
 
@@ -1875,41 +1497,27 @@ export default function Chat() {
               </div>
 
               <div
-                onClick={() =>
-                  setIsDarkMode(
-                    !isDarkMode
-                  )
-                }
+                onClick={() => setIsDarkMode(!isDarkMode)}
                 className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${
-                  isDarkMode
-                    ? "hover:bg-slate-700"
-                    : "hover:bg-slate-100"
+                  isDarkMode ? "hover:bg-slate-700" : "hover:bg-slate-100"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <span className="text-[15px]">
-                    {isDarkMode
-                      ? "🌙"
-                      : "☀️"}
+                    {isDarkMode ? "🌙" : "☀️"}
                   </span>
 
-                  <span className="text-[13px] font-medium">
-                    Dark Theme
-                  </span>
+                  <span className="text-[13px] font-medium">Dark Theme</span>
                 </div>
 
                 <div
                   className={`w-8 h-[18px] rounded-full flex items-center p-0.5 transition-colors ${
-                    isDarkMode
-                      ? "bg-amber-500"
-                      : "bg-slate-300"
+                    isDarkMode ? "bg-amber-500" : "bg-slate-300"
                   }`}
                 >
                   <div
                     className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-300 ${
-                      isDarkMode
-                        ? "translate-x-[14px]"
-                        : "translate-x-0"
+                      isDarkMode ? "translate-x-[14px]" : "translate-x-0"
                     }`}
                   />
                 </div>
@@ -1918,9 +1526,7 @@ export default function Chat() {
               <div className="my-1 border-t border-slate-200/20" />
 
               <div
-                onClick={
-                  handleLogout
-                }
+                onClick={handleLogout}
                 className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-colors ${
                   isDarkMode
                     ? "hover:bg-slate-700 text-rose-400"
@@ -1942,20 +1548,14 @@ export default function Chat() {
                   />
                 </svg>
 
-                <span className="text-[13px] font-medium">
-                  Sign out
-                </span>
+                <span className="text-[13px] font-medium">Sign out</span>
               </div>
             </div>
           )}
 
           <div className="relative group w-full flex justify-center md:justify-start">
             <button
-              onClick={() =>
-                setIsSettingsOpen(
-                  !isSettingsOpen
-                )
-              }
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
               className={`flex items-center rounded-full transition-colors ${
                 isSidebarOpen
                   ? "w-full py-2 px-2.5"
@@ -2002,18 +1602,17 @@ export default function Chat() {
               </span>
             </button>
 
-            {!isSidebarOpen &&
-              !isSettingsOpen && (
-                <div
-                  className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
-                    isDarkMode
-                      ? "bg-slate-700 text-white"
-                      : "bg-slate-800 text-white"
-                  }`}
-                >
-                  Settings
-                </div>
-              )}
+            {!isSidebarOpen && !isSettingsOpen && (
+              <div
+                className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity z-[100] pointer-events-none whitespace-nowrap shadow-md ${
+                  isDarkMode
+                    ? "bg-slate-700 text-white"
+                    : "bg-slate-800 text-white"
+                }`}
+              >
+                Settings
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -2027,9 +1626,7 @@ export default function Chat() {
           {!isSidebarOpen && (
             <span
               className={`text-[18px] font-medium tracking-wide select-none ${
-                isDarkMode
-                  ? "text-slate-300"
-                  : "text-slate-600"
+                isDarkMode ? "text-slate-300" : "text-slate-600"
               }`}
             >
               CivilGPT
@@ -2039,8 +1636,7 @@ export default function Chat() {
 
         {/* CHAT */}
 
-        {activeTab ===
-          "chat" && (
+        {activeTab === "chat" && (
           <div className="flex-1 flex flex-col relative overflow-hidden h-full">
             <div className="flex-1 overflow-y-auto px-4 md:px-8 pt-2 pb-32">
               <div className="max-w-3xl mx-auto w-full">
@@ -2048,22 +1644,17 @@ export default function Chat() {
                   <div className="flex items-center justify-center h-full pt-20">
                     <span
                       className={`animate-spin text-3xl ${
-                        isDarkMode
-                          ? "text-slate-700"
-                          : "text-[#e8eaed]"
+                        isDarkMode ? "text-slate-700" : "text-[#e8eaed]"
                       }`}
                     >
                       ⏳
                     </span>
                   </div>
-                ) : messages.length ===
-                  0 ? (
+                ) : messages.length === 0 ? (
                   <div className="flex flex-col h-full text-left space-y-3 pt-[15vh]">
                     <h2
                       className={`text-4xl font-medium tracking-tight ${
-                        isDarkMode
-                          ? "text-slate-400"
-                          : "text-[#c4c7c5]"
+                        isDarkMode ? "text-slate-400" : "text-[#c4c7c5]"
                       }`}
                     >
                       Hello, Engineer.
@@ -2071,55 +1662,31 @@ export default function Chat() {
 
                     <p
                       className={`text-2xl font-medium max-w-xl leading-relaxed ${
-                        isDarkMode
-                          ? "text-slate-500"
-                          : "text-[#c4c7c5]"
+                        isDarkMode ? "text-slate-500" : "text-[#c4c7c5]"
                       }`}
                     >
-                      How can I help you with your
-                      structural analysis today?
+                      How can I help you with your structural analysis today?
                     </p>
                   </div>
                 ) : (
-                  messages.map(
-                    (
-                      message,
-                      index
-                    ) => (
-                      <MessageBubble
-                        key={
-                          message.id
-                        }
-                        m={message}
-                        isTyping={
-                          isLoading &&
-                          index ===
-                            messages.length -
-                              1 &&
-                          message.role ===
-                            "assistant"
-                        }
-                        isDark={
-                          isDarkMode
-                        }
-                        isCopied={
-                          copiedMessageId ===
-                          message.id
-                        }
-                        onCopy={
-                          handleCopyMessage
-                        }
-                      />
-                    )
-                  )
+                  messages.map((message, index) => (
+                    <MessageBubble
+                      key={message.id}
+                      m={message}
+                      isTyping={
+                        isLoading &&
+                        index === messages.length - 1 &&
+                        message.role === "assistant"
+                      }
+                      isDark={isDarkMode}
+                      isCopied={copiedMessageId === message.id}
+                      onCopy={handleCopyMessage}
+                      onOpenViewer={openViewer}
+                    />
+                  ))
                 )}
 
-                <div
-                  ref={
-                    messagesEndRef
-                  }
-                  className="h-4"
-                />
+                <div ref={messagesEndRef} className="h-4" />
               </div>
             </div>
 
@@ -2129,9 +1696,7 @@ export default function Chat() {
               <>
                 <div
                   className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-[2px]"
-                  onClick={() =>
-                    setShowUploadDialog(false)
-                  }
+                  onClick={() => setShowUploadDialog(false)}
                 />
 
                 <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
@@ -2141,9 +1706,7 @@ export default function Chat() {
                         ? "bg-[#1e1f20] border-slate-700 text-slate-200"
                         : "bg-white border-slate-200 text-slate-800"
                     }`}
-                    onClick={(event) =>
-                      event.stopPropagation()
-                    }
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <div className="flex items-start justify-between gap-4 mb-6">
                       <div>
@@ -2152,9 +1715,7 @@ export default function Chat() {
                         </h3>
                         <p
                           className={`mt-1 text-[12px] ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
+                            isDarkMode ? "text-slate-500" : "text-slate-500"
                           }`}
                         >
                           Choose how this document should be indexed.
@@ -2163,9 +1724,7 @@ export default function Chat() {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          setShowUploadDialog(false)
-                        }
+                        onClick={() => setShowUploadDialog(false)}
                         className={`w-8 h-8 rounded-full flex items-center justify-center ${
                           isDarkMode
                             ? "text-slate-500 hover:bg-slate-700 hover:text-slate-200"
@@ -2193,9 +1752,7 @@ export default function Chat() {
                     <div className="grid grid-cols-2 gap-3 mb-5">
                       <button
                         type="button"
-                        onClick={() =>
-                          setUploadType("engineering")
-                        }
+                        onClick={() => setUploadType("engineering")}
                         className={`rounded-[20px] border p-4 text-left transition-all ${
                           uploadType === "engineering"
                             ? isDarkMode
@@ -2212,20 +1769,17 @@ export default function Chat() {
                         </p>
                         <p
                           className={`mt-1 text-[11px] leading-relaxed ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
+                            isDarkMode ? "text-slate-500" : "text-slate-500"
                           }`}
                         >
-                          Project reports, drawings, notes and other engineering documents.
+                          Project reports, drawings, notes and other engineering
+                          documents.
                         </p>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() =>
-                          setUploadType("standard")
-                        }
+                        onClick={() => setUploadType("standard")}
                         className={`rounded-[20px] border p-4 text-left transition-all ${
                           uploadType === "standard"
                             ? isDarkMode
@@ -2242,9 +1796,7 @@ export default function Chat() {
                         </p>
                         <p
                           className={`mt-1 text-[11px] leading-relaxed ${
-                            isDarkMode
-                              ? "text-slate-500"
-                              : "text-slate-500"
+                            isDarkMode ? "text-slate-500" : "text-slate-500"
                           }`}
                         >
                           Store as citation-ready authoritative code material.
@@ -2255,11 +1807,13 @@ export default function Chat() {
                     {uploadType === "standard" ? (
                       <div className="space-y-4">
                         <div>
-                          <label className={`block text-[12px] font-medium mb-1.5 ${
-                            isDarkMode
-                              ? "text-slate-300"
-                              : "text-slate-700"
-                          }`}>
+                          <label
+                            className={`block text-[12px] font-medium mb-1.5 ${
+                              isDarkMode
+                                ? "text-slate-300"
+                                : "text-slate-700"
+                            }`}
+                          >
                             IS Number
                           </label>
 
@@ -2278,11 +1832,13 @@ export default function Chat() {
                         </div>
 
                         <div>
-                          <label className={`block text-[12px] font-medium mb-1.5 ${
-                            isDarkMode
-                              ? "text-slate-300"
-                              : "text-slate-700"
-                          }`}>
+                          <label
+                            className={`block text-[12px] font-medium mb-1.5 ${
+                              isDarkMode
+                                ? "text-slate-300"
+                                : "text-slate-700"
+                            }`}
+                          >
                             Edition / Year
                           </label>
 
@@ -2302,11 +1858,13 @@ export default function Chat() {
                         </div>
 
                         <div>
-                          <label className={`block text-[12px] font-medium mb-1.5 ${
-                            isDarkMode
-                              ? "text-slate-300"
-                              : "text-slate-700"
-                          }`}>
+                          <label
+                            className={`block text-[12px] font-medium mb-1.5 ${
+                              isDarkMode
+                                ? "text-slate-300"
+                                : "text-slate-700"
+                            }`}
+                          >
                             Standard Title
                           </label>
 
@@ -2407,13 +1965,9 @@ export default function Chat() {
                       <div className="min-w-0 flex-1">
                         <p
                           className={`text-[13px] font-medium truncate max-w-[240px] md:max-w-[420px] ${
-                            isDarkMode
-                              ? "text-slate-200"
-                              : "text-slate-800"
+                            isDarkMode ? "text-slate-200" : "text-slate-800"
                           }`}
-                          title={
-                            uploadedPdfName
-                          }
+                          title={uploadedPdfName}
                         >
                           {uploadedPdfName}
                         </p>
@@ -2441,12 +1995,8 @@ export default function Chat() {
 
                       <button
                         type="button"
-                        onClick={
-                          removePdfAttachment
-                        }
-                        disabled={
-                          isLoading
-                        }
+                        onClick={removePdfAttachment}
+                        disabled={isLoading}
                         className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
                           isDarkMode
                             ? "text-slate-500 hover:bg-slate-700 hover:text-slate-200"
@@ -2479,8 +2029,7 @@ export default function Chat() {
                 {uploadStatus && (
                   <div
                     className={`mb-3 text-[12px] px-4 py-2 rounded-full inline-flex font-medium shadow-sm ${
-                      uploadStatus.type ===
-                      "success"
+                      uploadStatus.type === "success"
                         ? isDarkMode
                           ? "bg-emerald-900/30 text-emerald-400"
                           : "bg-[#e6f4ea] text-[#137333]"
@@ -2489,18 +2038,14 @@ export default function Chat() {
                         : "bg-[#fce8e6] text-[#c5221f]"
                     }`}
                   >
-                    {
-                      uploadStatus.message
-                    }
+                    {uploadStatus.message}
                   </div>
                 )}
 
                 {/* FORM */}
 
                 <form
-                  onSubmit={
-                    customHandleSubmit
-                  }
+                  onSubmit={customHandleSubmit}
                   className={`relative flex items-end rounded-[32px] p-2 pr-4 transition-all focus-within:shadow-md border ${
                     isDarkMode
                       ? "bg-[#1e1f20] border-transparent focus-within:bg-[#333537] focus-within:border-slate-600"
@@ -2511,12 +2056,8 @@ export default function Chat() {
                     type="file"
                     accept="application/pdf"
                     className="hidden"
-                    ref={
-                      fileInputRef
-                    }
-                    onChange={
-                      handleFileUpload
-                    }
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
                   />
 
                   {/* UPLOAD */}
@@ -2524,25 +2065,18 @@ export default function Chat() {
                   <button
                     type="button"
                     onClick={openUploadDialog}
-                    disabled={
-                      isUploading ||
-                      isLoading
-                    }
+                    disabled={isUploading || isLoading}
                     className={`p-2.5 rounded-full transition-colors shrink-0 mb-0.5 ml-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                       isDarkMode
                         ? "text-slate-400 hover:text-slate-200 hover:bg-slate-700"
                         : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
                     }`}
                     title={
-                      uploadedPdfName
-                        ? "Add or replace PDF"
-                        : "Add PDF"
+                      uploadedPdfName ? "Add or replace PDF" : "Add PDF"
                     }
                   >
                     {isUploading ? (
-                      <span>
-                        ⏳
-                      </span>
+                      <span>⏳</span>
                     ) : (
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -2570,44 +2104,26 @@ export default function Chat() {
                         : "text-slate-800 placeholder-slate-500"
                     }`}
                     rows={1}
-                    value={
-                      myInput
-                    }
+                    value={myInput}
                     placeholder="Ask about codes, mix proportions, or loads..."
-                    onChange={(e) =>
-                      setMyInput(
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => setMyInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (
-                        e.key ===
-                          "Enter" &&
-                        !e.shiftKey
-                      ) {
+                      if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
 
                         customHandleSubmit();
                       }
                     }}
-                    disabled={
-                      isLoading
-                    }
+                    disabled={isLoading}
                   />
 
                   {/* SEND */}
 
                   <button
                     type="submit"
-                    disabled={
-                      myInput.trim() ===
-                        "" ||
-                      isLoading
-                    }
+                    disabled={myInput.trim() === "" || isLoading}
                     className={`p-2.5 rounded-full shrink-0 mb-0.5 transition-colors ${
-                      myInput.trim() ===
-                        "" ||
-                      isLoading
+                      myInput.trim() === "" || isLoading
                         ? isDarkMode
                           ? "text-slate-600"
                           : "text-slate-300"
@@ -2629,13 +2145,10 @@ export default function Chat() {
 
                 <div
                   className={`text-center mt-2.5 text-[11px] ${
-                    isDarkMode
-                      ? "text-slate-500"
-                      : "text-slate-400"
+                    isDarkMode ? "text-slate-500" : "text-slate-400"
                   }`}
                 >
-                  CivilGPT can make mistakes.
-                  Verify critical structural
+                  CivilGPT can make mistakes. Verify critical structural
                   calculations against IS Codes.
                 </div>
               </div>
@@ -2644,16 +2157,16 @@ export default function Chat() {
         )}
 
         {/* -------------------------------------------------- */}
-        {/* TEMPORARY VIEWER MODAL TEST */}
+        {/* DYNAMIC VIEWER MODAL */}
         {/* -------------------------------------------------- */}
-        {showTestViewer && (
+        {viewerState.isOpen && (
           <StandardSourceViewer
-            isOpen={showTestViewer}
-            onClose={() => setShowTestViewer(false)}
-            documentId="89ba6142-899d-408c-829b-f9634e2af7d2" // Hardcoded test doc
-            page={8} // Hardcoded test page
-            title="IS 10262:2009 (Test Mode)"
-            citation="Table 2"
+            isOpen={viewerState.isOpen}
+            onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+            documentId={viewerState.documentId}
+            page={viewerState.page}
+            title={viewerState.title}
+            citation={viewerState.citation}
             isDarkMode={isDarkMode}
           />
         )}
@@ -2664,10 +2177,8 @@ export default function Chat() {
         {/* -------------------------------------------------- */}
 
         {activeTab === "calculator" && (
-  <MixDesignCalculator
-    isDarkMode={isDarkMode}
-  />
-)}
+          <MixDesignCalculator isDarkMode={isDarkMode} />
+        )}
 
         {/* -------------------------------------------------- */}
         {/* UNIT CONVERTER */}

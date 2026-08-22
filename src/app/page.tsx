@@ -53,7 +53,7 @@ interface ParsedCitation {
 }
 
 // ------------------------------------------------------------
-// ROBUST RIGHT-TO-LEFT URL SEGMENT PARSER
+// ROBUST RIGHT-TO-LEFT URL SEGMENT PARSER WITH DIAGNOSTICS
 // ------------------------------------------------------------
 
 function parseCitationHref(href: string): ParsedCitation | null {
@@ -118,25 +118,7 @@ const MessageBubble = memo(
     
     const processedContent = useMemo(() => {
       if (m.role !== "assistant") return m.content;
-
-      let text = m.content;
-      
-      text = text.replace(
-        /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
-        (_match, label, docId, page, score) => {
-          const finalScore = score || "0.75"; 
-          return `[View Source: ${label.trim()}](#viewer/${docId}/${page}/${finalScore})`;
-        }
-      );
-
-      text = text.replace(
-        /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
-        (_match, citationLabel, pageNumber) => {
-          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.75)`;
-        }
-      );
-
-      return text;
+      return m.content;
     }, [m.content, m.role]);
 
     return (
@@ -275,6 +257,8 @@ const MessageBubble = memo(
                   ),
                   // Sleek Aesthetic Link Component with Robust Parsing & Confidence Tints
                   a: ({ node, href, children, ...props }) => {
+                    console.log("RAW HREF RECEIVED BY REACT-MARKDOWN:", href);
+
                     const parsed = parseCitationHref(href || "");
 
                     if (parsed) {

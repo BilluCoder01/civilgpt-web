@@ -182,11 +182,18 @@ function buildStandardContext(
       const docId = source.standard_document_id || "";
       const page = source.page_number || 1;
       
-      const rawScore = Number(source.similarity);
-      const similarityScore = Number.isFinite(rawScore) ? rawScore.toFixed(4) : "0.75";
+      const numericScore = typeof source.similarity === "string"
+        ? parseFloat(source.similarity)
+        : Number(source.similarity);
+
+      const safeScore = Number.isFinite(numericScore)
+        ? Math.min(1, Math.max(0, numericScore))
+        : 0.75;
+
+      const scoreStr = safeScore.toFixed(4);
       
       const citationLink = docId 
-        ? `[Source: ${citationText}](#viewer/${docId}/${page}/${similarityScore})` 
+        ? `[Source: ${citationText}](#viewer/${docId}/${page}/${scoreStr})` 
         : `**Source: ${citationText}**`;
 
       citationMap.set(
@@ -211,7 +218,7 @@ function buildStandardContext(
         `Figure: ${source.figure_no ?? "Unknown"}`,
         `Annex: ${source.annex_no ?? "Unknown"}`,
         `Section Title: ${source.section_title ?? "Unknown"}`,
-        `Similarity: ${safeSimilarity(source.similarity)}`,
+        `Similarity: ${scoreStr}`,
       ];
 
       return [
@@ -232,7 +239,6 @@ function buildStandardContext(
     citationMap,
   };
 }
-
 
 function safeSimilarity(
   similarity: unknown
@@ -445,10 +451,6 @@ export async function POST(
   req: Request
 ) {
   try {
-    // ========================================================
-    // AUTHENTICATION
-    // ========================================================
-
     const cookieStore = await cookies();
 
     const supabaseAuth =
@@ -479,10 +481,6 @@ export async function POST(
         }
       );
     }
-
-    // ========================================================
-    // REQUEST DATA
-    // ========================================================
 
     const body =
       await req.json();
@@ -524,10 +522,6 @@ export async function POST(
         }
       );
     }
-
-    // ========================================================
-    // SESSION
-    // ========================================================
 
     let sessionId = clientSessionId;
 
@@ -579,10 +573,6 @@ export async function POST(
       }
     }
 
-    // ========================================================
-    // SAVE USER MESSAGE
-    // ========================================================
-
     const {
       error: userMessageError,
     } =
@@ -600,10 +590,6 @@ export async function POST(
       throw userMessageError;
     }
 
-    // ========================================================
-    // QUERY EMBEDDING
-    // ========================================================
-
     const { embedding } =
       await embed({
         model:
@@ -615,10 +601,6 @@ export async function POST(
 
     const queryEmbedding =
       embedding.slice(0, 768);
-
-    // ========================================================
-    // PARALLEL RAG SEARCH
-    // ========================================================
 
     const [
       standardsResult,
@@ -645,10 +627,6 @@ export async function POST(
       ),
     ]);
 
-    // ========================================================
-    // ERROR HANDLING
-    // ========================================================
-
     if (standardsResult.error) {
       console.error(
         "Standards RAG error:",
@@ -668,10 +646,6 @@ export async function POST(
 
     const engineeringDocuments =
       (engineeringResult.data || []) as EngineeringDocument[];
-
-    // ========================================================
-    // CONTEXT
-    // ========================================================
 
     const hasStandards =
       standardChunks.length > 0;
@@ -707,18 +681,12 @@ export async function POST(
           )
         : "No matching engineering-document sources were retrieved.";
 
-    // ========================================================
-    // CITATION + SYSTEM PROMPT
-    // ========================================================
-
     const citationInstruction =
       hasStandards
         ? `
 AUTHORITATIVE IS-CODE CITATION RULES
 
 The retrieved IS-standard sources are labelled [STD-1], [STD-2], etc.
-
-Do NOT write human-readable IS-code citations yourself.
 
 When a statement is supported by a standard source, output ONLY its exact
 source token at the end of the supported statement:
@@ -727,77 +695,28 @@ source token at the end of the supported statement:
 [[CITE:STD-2]]
 
 Strict rules:
-
 1. The token MUST refer to the single source whose CONTENT supports the statement.
 2. Never combine metadata from different sources.
 3. Never invent clause, sub-clause, table, figure, annex, edition, or page information.
-4. Never output "Source: IS ..." yourself. The server inserts that text.
-5. For a direct table/value question, prefer a source labelled:
-   DIRECT TABLE SOURCE — PREFER FOR DIRECT TABLE/VALUE QUESTIONS
-   when that source's CONTENT contains the requested value.
-6. You are NOT allowed to write any human-readable citation or "Source: ..." text yourself. The server will generate it from [[CITE:STD-X]] tokens only.
-7. If no retrieved standard source supports the code-specific statement,
-   say that the retrieved evidence is insufficient.
-8. Do not output bare [STD-1]. Always use [[CITE:STD-1]].
-9. Do not invent citation tokens that were not supplied.
+4. Never output "Source: IS ..." yourself.
+5. You are NOT allowed to write any human-readable citation text yourself.
 `
         : `
 IS-CODE CITATION RULE
-
-No IS-standard chunks were retrieved for this question.
-Do not fabricate an IS-code citation.
+No IS-standard chunks were retrieved for this question. Do not fabricate citations.
 `;
 
     const systemPrompt = `
 You are CivilGPT, a professional civil and structural engineering AI assistant.
 
-CORE BEHAVIOR
-
-1. Answer the user's actual question directly.
-2. Maintain continuity with the conversation.
-3. Distinguish official code requirements from calculations, assumptions,
-   engineering judgement, recommendations, and project-document content.
-4. Never present an assumption as an IS-code requirement.
-5. Never fabricate a citation.
-6. For safety-critical engineering decisions, clearly state important assumptions.
-
-SOURCE PRIORITY
-
-When relevant IS-standard material has been retrieved, use that material as
-the primary authority for code-specific statements.
-
-User engineering/project documents may provide project context but are not
-automatically official code requirements.
-
 ${citationInstruction}
 
 RETRIEVED IS-STANDARD CONTEXT:
-
-${
-  hasStandards
-    ? standardContext
-    : "No matching IS-code sources were retrieved."
-}
+${hasStandards ? standardContext : "No matching IS-code sources were retrieved."}
 
 RETRIEVED ENGINEERING-DOCUMENT CONTEXT:
-
-${
-  hasEngineeringDocuments
-    ? engineeringContext
-    : "No matching engineering-document sources were retrieved."
-}
-
-IMPORTANT SOURCE-BINDING CHECK
-
-Before emitting a citation token, identify the ONE [STD-*] source whose
-CONTENT supports the statement. Emit only that source's token.
-Never borrow citation metadata from another source.
+${hasEngineeringDocuments ? engineeringContext : "No matching engineering-document sources were retrieved."}
 `.trim();
-
-
-    // ========================================================
-    // STREAM RESPONSE
-    // ========================================================
 
     const result =
       await streamText({
@@ -805,12 +724,9 @@ Never borrow citation metadata from another source.
           google(
             "gemini-3.6-flash"
           ),
-
         system:
           systemPrompt,
-
         messages,
-
         onFinish:
           async ({
             text,
@@ -820,102 +736,22 @@ Never borrow citation metadata from another source.
                 return;
               }
 
-              // ------------------------------------------------
-              // SAVE ASSISTANT MESSAGE
-              // ------------------------------------------------
-
-              const {
-                error:
-                  assistantInsertError,
-              } =
-                await supabaseAdmin
-                  .from("messages")
-                  .insert([
-                    {
-                      session_id:
-                        sessionId,
-                      role:
-                        "assistant",
-                      content:
-                        replaceCitationTokens(
-                          text,
-                          citationMap
-                        ),
-                    },
-                  ]);
-
-              if (assistantInsertError) {
-                console.error(
-                  "Failed to save assistant message:",
-                  assistantInsertError
-                );
-
-                return;
-              }
-
-              // ------------------------------------------------
-              // UPDATE CHAT TITLE
-              // ------------------------------------------------
-
-              const {
-                count: msgCount,
-              } =
-                await supabaseAdmin
-                  .from("messages")
-                  .select(
-                    "*",
-                    {
-                      count: "exact",
-                      head: true,
-                    }
-                  )
-                  .eq(
-                    "session_id",
-                    sessionId
-                  );
-
-              if (
-                msgCount !== null &&
-                msgCount < 3
-              ) {
-                const shortTitle =
-                  latestContent.length > 25
-                    ? `${latestContent.substring(
-                        0,
-                        25
-                      )}...`
-                    : latestContent;
-
-                const {
-                  error: titleError,
-                } =
-                  await supabaseAdmin
-                    .from(
-                      "chat_sessions"
-                    )
-                    .update({
-                      title:
-                        shortTitle,
-                    })
-                    .eq(
-                      "id",
-                      sessionId
-                    )
-                    .eq(
-                      "user_id",
-                      user.id
-                    );
-
-                if (titleError) {
-                  console.error(
-                    "Failed to update chat title:",
-                    titleError
-                  );
-                }
-              }
-            } catch (
-              finishError
-            ) {
+              await supabaseAdmin
+                .from("messages")
+                .insert([
+                  {
+                    session_id:
+                      sessionId,
+                    role:
+                      "assistant",
+                    content:
+                      replaceCitationTokens(
+                        text,
+                        citationMap
+                      ),
+                  },
+                ]);
+            } catch (finishError) {
               console.error(
                 "onFinish database error:",
                 finishError
@@ -923,10 +759,6 @@ Never borrow citation metadata from another source.
             }
           },
       });
-
-    // ========================================================
-    // RESPONSE
-    // ========================================================
 
     const rawResponse =
       result.toTextStreamResponse();

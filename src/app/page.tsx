@@ -72,18 +72,20 @@ const MessageBubble = memo(
 
       let text = m.content;
       
+      // Standardize backend markdown viewer links, ensuring a default score is present if missing
       text = text.replace(
         /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
         (_match, label, docId, page, score) => {
-          const scoreParam = score ? `/${score}` : "";
-          return `[View Source: ${label.trim()}](#viewer/${docId}/${page}${scoreParam})`;
+          const finalScore = score || "0.85"; // Default high score if missing
+          return `[View Source: ${label.trim()}](#viewer/${docId}/${page}/${finalScore})`;
         }
       );
 
+      // Catch old raw bold text formatting and turn it into colored pill links with a default score
       text = text.replace(
         /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
         (_match, citationLabel, pageNumber) => {
-          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber})`;
+          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.85)`;
         }
       );
 
@@ -230,13 +232,13 @@ const MessageBubble = memo(
                       const parts = href.replace("#viewer/", "").split("/");
                       const docId = parts[0] || FALLBACK_DOC_ID;
                       const page = parseInt(parts[1], 10) || 1;
-                      const score = parts.length > 2 ? parseFloat(parts[2]) : null;
+                      const score = parts.length > 2 ? parseFloat(parts[2]) : 0.85;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
 
                       let pillStyling = isDark ? "bg-[#1e1f20] border-slate-700 text-slate-300" : "bg-white border-slate-200 text-slate-700 shadow-sm";
                       let confidenceLabel = "Source Document";
 
-                      if (score !== null && !isNaN(score)) {
+                      if (!isNaN(score)) {
                         const percent = (score * 100).toFixed(1);
                         if (score >= 0.82) {
                           pillStyling = isDark

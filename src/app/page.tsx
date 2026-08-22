@@ -2630,14 +2630,17 @@ export default function Chat() {
         {/* CALCULATOR */}
         {/* -------------------------------------------------- */}
 
-        {activeTab ===
-          "calculator" && (
-          <MixDesignCalculator
-            isDarkMode={
-              isDarkMode
-            }
-          />
-        )}
+        {activeTab === "calculator" && (
+  <div className="h-full overflow-y-auto">
+    <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6">
+      <SourceApiTest isDarkMode={isDarkMode} />
+    </div>
+
+    <MixDesignCalculator
+      isDarkMode={isDarkMode}
+    />
+  </div>
+)}
 
         {/* -------------------------------------------------- */}
         {/* UNIT CONVERTER */}

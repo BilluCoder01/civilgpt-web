@@ -48,11 +48,7 @@ type UploadType = "engineering" | "standard";
 // MESSAGE BUBBLE & ROBUST CATCH-ALL REGEX INTERCEPTOR
 // ------------------------------------------------------------
 
-// Fallback hardcoded doc ID if the backend omits it
 const FALLBACK_DOC_ID = "89ba6142-899d-408c-829b-f9634e2af7d2";
-
-// Matches both backend markdown links and raw citation strings to guarantee 100% reliability
-const SOURCE_MATCHER_REGEX = /(?:\[Source:\s*([^\]]+)\]\((#viewer\/([^\)]+))\)|\*\*Source:\s*([^\*]+)\*\*)/gi;
 
 const MessageBubble = memo(
   ({
@@ -71,13 +67,11 @@ const MessageBubble = memo(
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
     
-    // Pre-process content to guarantee it converts into our clickable viewer protocol format
     const processedContent = useMemo(() => {
       if (m.role !== "assistant") return m.content;
 
       let text = m.content;
       
-      // If the backend generated a markdown link already, normalize it
       text = text.replace(
         /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
         (_match, label, docId, page, score) => {
@@ -86,7 +80,6 @@ const MessageBubble = memo(
         }
       );
 
-      // Fallback: If backend output raw bold text like "**Source: ... Page 8**", catch and convert it
       text = text.replace(
         /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
         (_match, citationLabel, pageNumber) => {
@@ -231,7 +224,7 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-                  // Sleek Aesthetic Link Component with Confidence Indicator
+                  // Sleek Aesthetic Link Component with Background Confidence Tint
                   a: ({ node, href, children, ...props }) => {
                     if (href?.startsWith("#viewer/")) {
                       const parts = href.replace("#viewer/", "").split("/");
@@ -240,20 +233,26 @@ const MessageBubble = memo(
                       const score = parts.length > 2 ? parseFloat(parts[2]) : null;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
 
-                      let dotColor = "bg-slate-400";
-                      let tooltip = "View source document";
-                      
+                      let pillStyling = isDark ? "bg-[#1e1f20] border-slate-700 text-slate-300" : "bg-white border-slate-200 text-slate-700 shadow-sm";
+                      let confidenceLabel = "Source Document";
+
                       if (score !== null && !isNaN(score)) {
                         const percent = (score * 100).toFixed(1);
                         if (score >= 0.82) {
-                          dotColor = "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]";
-                          tooltip = `High Confidence Match (${percent}%)`;
+                          pillStyling = isDark
+                            ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:border-emerald-500/50"
+                            : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300 shadow-sm";
+                          confidenceLabel = `🟢 High Confidence Match (${percent}%) — Verified Code Source`;
                         } else if (score >= 0.75) {
-                          dotColor = "bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]";
-                          tooltip = `Medium Confidence Match (${percent}%)`;
+                          pillStyling = isDark
+                            ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:border-amber-500/50"
+                            : "bg-amber-50 border-amber-200 text-amber-800 hover:border-amber-300 shadow-sm";
+                          confidenceLabel = `🟠 Medium Confidence Match (${percent}%) — Cross-reference recommended`;
                         } else {
-                          dotColor = "bg-rose-500 shadow-[0_0_5px_rgba(243,33,33,0.5)]";
-                          tooltip = `Low Confidence Match (${percent}%) - Verify source manually`;
+                          pillStyling = isDark
+                            ? "bg-rose-950/40 border-rose-800/60 text-rose-300 hover:border-rose-500/50"
+                            : "bg-rose-50 border-rose-200 text-rose-800 hover:border-rose-300 shadow-sm";
+                          confidenceLabel = `🔴 Low Confidence Match (${percent}%) — Please double check manually`;
                         }
                       }
 
@@ -265,37 +264,24 @@ const MessageBubble = memo(
                               e.preventDefault(); 
                               onOpenViewer(docId, page, "Document Source", citationText);
                             }}
-                            className={`group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-105 active:scale-95 ${
-                              isDark
-                                ? "bg-[#1e1f20] border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-amber-400 shadow-sm"
-                                : "bg-white border-slate-200 hover:border-amber-300 text-slate-600 hover:text-amber-700 shadow-sm"
-                            }`}
-                            title={tooltip}
+                            className={`group inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-[1.02] active:scale-95 ${pillStyling}`}
+                            title={confidenceLabel}
                           >
-                            <div className="relative flex items-center justify-center">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={2.5}
-                                stroke="currentColor"
-                                className={`w-3.5 h-3.5 ${
-                                  isDark
-                                    ? 'text-amber-500/70 group-hover:text-amber-400'
-                                    : 'text-amber-500 group-hover:text-amber-600'
-                                }`}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-                                />
-                              </svg>
-                              {score !== null && !isNaN(score) && (
-                                <span className={`absolute -top-1 -right-1.5 w-2 h-2 rounded-full border-[1.5px] ${isDark ? 'border-[#1e1f20]' : 'border-white'} ${dotColor}`} />
-                              )}
-                            </div>
-                            <span className="truncate max-w-[200px]">{citationText}</span>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={2.5}
+                              stroke="currentColor"
+                              className="w-3.5 h-3.5 shrink-0 opacity-80 group-hover:scale-110 transition-transform"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                              />
+                            </svg>
+                            <span>{citationText}</span>
                           </button>
                         </span>
                       );

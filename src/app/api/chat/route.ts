@@ -625,7 +625,7 @@ export async function POST(
         "match_standard_chunks",
         {
           query_embedding: queryEmbedding,
-          match_threshold: 0.40, // Slightly lowered threshold
+          match_threshold: 0.30, // Slightly lowered threshold
           match_count: 2,        // Reduced to 2 for instant execution
           p_user_id: user.id,
         }
@@ -635,7 +635,7 @@ export async function POST(
         "match_engineering_codes",
         {
           query_embedding: queryEmbedding,
-          match_threshold: 0.40,
+          match_threshold: 0.30,
           match_count: 2,        // Reduced to 2 for instant execution
           p_user_id: user.id,
         }

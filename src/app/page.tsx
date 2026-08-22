@@ -72,20 +72,18 @@ const MessageBubble = memo(
 
       let text = m.content;
       
-      // Standardize backend markdown viewer links, ensuring a default score is present if missing
       text = text.replace(
         /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
         (_match, label, docId, page, score) => {
-          const finalScore = score || "0.85"; // Default high score if missing
+          const finalScore = score || "0.70"; 
           return `[View Source: ${label.trim()}](#viewer/${docId}/${page}/${finalScore})`;
         }
       );
 
-      // Catch old raw bold text formatting and turn it into colored pill links with a default score
       text = text.replace(
         /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
         (_match, citationLabel, pageNumber) => {
-          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.85)`;
+          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.70)`;
         }
       );
 
@@ -226,13 +224,13 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-                  // Sleek Aesthetic Link Component with Background Confidence Tint
+                  // Sleek Aesthetic Link Component with Recalibrated Confidence Tints
                   a: ({ node, href, children, ...props }) => {
                     if (href?.startsWith("#viewer/")) {
                       const parts = href.replace("#viewer/", "").split("/");
                       const docId = parts[0] || FALLBACK_DOC_ID;
                       const page = parseInt(parts[1], 10) || 1;
-                      const score = parts.length > 2 ? parseFloat(parts[2]) : 0.85;
+                      const score = parts.length > 2 ? parseFloat(parts[2]) : 0.70;
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
 
                       let pillStyling = isDark ? "bg-[#1e1f20] border-slate-700 text-slate-300" : "bg-white border-slate-200 text-slate-700 shadow-sm";
@@ -240,17 +238,20 @@ const MessageBubble = memo(
 
                       if (!isNaN(score)) {
                         const percent = (score * 100).toFixed(1);
-                        if (score >= 0.82) {
+                        if (score >= 0.78) {
+                          // Green / High Confidence
                           pillStyling = isDark
                             ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:border-emerald-500/50"
                             : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300 shadow-sm";
                           confidenceLabel = `🟢 High Confidence Match (${percent}%) — Verified Code Source`;
-                        } else if (score >= 0.75) {
+                        } else if (score >= 0.65) {
+                          // Amber / Medium Confidence
                           pillStyling = isDark
                             ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:border-amber-500/50"
                             : "bg-amber-50 border-amber-200 text-amber-800 hover:border-amber-300 shadow-sm";
                           confidenceLabel = `🟠 Medium Confidence Match (${percent}%) — Cross-reference recommended`;
                         } else {
+                          // Rose / Low Confidence (Red warning)
                           pillStyling = isDark
                             ? "bg-rose-950/40 border-rose-800/60 text-rose-300 hover:border-rose-500/50"
                             : "bg-rose-50 border-rose-200 text-rose-800 hover:border-rose-300 shadow-sm";

@@ -16,7 +16,13 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import MixDesignCalculator from "@/components/MixDesignCalculator";
 import UnitConverter from "@/components/UnitConverter";
-import StandardSourceViewer from "@/components/StandardSourceViewer"; 
+import dynamic from "next/dynamic";
+
+// DYNAMICALLY IMPORT THE VIEWER WITH SSR DISABLED TO FIX THE DOMMatrix BUILD CRASH
+const StandardSourceViewer = dynamic(
+  () => import("@/components/StandardSourceViewer"),
+  { ssr: false }
+);
 
 type Message = {
   id: string;
@@ -2167,7 +2173,7 @@ export default function Chat() {
       {/* -------------------------------------------------- */}
       <StandardSourceViewer
         isOpen={viewerState.isOpen}
-        onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setViewerState((prev) => ({ ...prev, isOpen: false }))}
         documentId={viewerState.documentId}
         page={viewerState.page}
         title={viewerState.title}

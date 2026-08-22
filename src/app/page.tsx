@@ -53,7 +53,7 @@ interface ParsedCitation {
 }
 
 // ------------------------------------------------------------
-// ROBUST CITATION PARSING HELPERS
+// ROBUST RIGHT-TO-LEFT URL SEGMENT PARSER
 // ------------------------------------------------------------
 
 function parseCitationHref(href: string): ParsedCitation | null {
@@ -64,21 +64,19 @@ function parseCitationHref(href: string): ParsedCitation | null {
     .replace(/[)\s]+$/, "")
     .trim();
 
-  const match = raw.match(/^(.*)\/([^/]+)\/([^/]+)$/);
-  if (!match) return null;
+  const segments = raw.split("/");
+  if (segments.length < 3) return null;
 
-  const [, docId, pageStr, scoreStr] = match;
+  const scoreStr = segments.pop() || "";
+  const pageStr = segments.pop() || "";
+  const docId = segments.join("/");
+
   const page = Number.parseInt(pageStr, 10);
 
   let score: number | null = null;
-  try {
-    const decoded = decodeURIComponent(scoreStr);
-    const parsed = Number.parseFloat(decoded);
-    if (!Number.isNaN(parsed)) {
-      score = Math.min(1, Math.max(0, parsed));
-    }
-  } catch {
-    score = null;
+  const parsed = Number.parseFloat(scoreStr);
+  if (!Number.isNaN(parsed)) {
+    score = Math.min(1, Math.max(0, parsed));
   }
 
   return {
@@ -123,7 +121,6 @@ const MessageBubble = memo(
 
       let text = m.content;
       
-      // Preserve the real score if provided by the backend instead of overwriting it
       text = text.replace(
         /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
         (_match, label, docId, page, score) => {

@@ -182,8 +182,11 @@ function buildStandardContext(
       const docId = source.standard_document_id || "";
       const page = source.page_number || 1;
       
+      const rawScore = Number(source.similarity);
+      const similarityScore = Number.isFinite(rawScore) ? rawScore.toFixed(4) : "0.75";
+      
       const citationLink = docId 
-        ? `[Source: ${citationText}](#viewer/${docId}/${page}/${source.similarity.toFixed(3)})` 
+        ? `[Source: ${citationText}](#viewer/${docId}/${page}/${similarityScore})` 
         : `**Source: ${citationText}**`;
 
       citationMap.set(
@@ -614,7 +617,7 @@ export async function POST(
       embedding.slice(0, 768);
 
     // ========================================================
-    // PARALLEL RAG SEARCH (SUPER LIGHTWEIGHT FOR SPEED)
+    // PARALLEL RAG SEARCH
     // ========================================================
 
     const [
@@ -625,8 +628,8 @@ export async function POST(
         "match_standard_chunks",
         {
           query_embedding: queryEmbedding,
-          match_threshold: 0.30, // Slightly lowered threshold
-          match_count: 2,        // Reduced to 2 for instant execution
+          match_threshold: 0.30,
+          match_count: 3,
           p_user_id: user.id,
         }
       ),
@@ -636,7 +639,7 @@ export async function POST(
         {
           query_embedding: queryEmbedding,
           match_threshold: 0.30,
-          match_count: 2,        // Reduced to 2 for instant execution
+          match_count: 3,
           p_user_id: user.id,
         }
       ),
@@ -733,8 +736,6 @@ Strict rules:
    DIRECT TABLE SOURCE — PREFER FOR DIRECT TABLE/VALUE QUESTIONS
    when that source's CONTENT contains the requested value.
 6. You are NOT allowed to write any human-readable citation or "Source: ..." text yourself. The server will generate it from [[CITE:STD-X]] tokens only.
-6. Do not cite an Annex/example merely because it repeats a value that is already
-   directly present in a retrieved table.
 7. If no retrieved standard source supports the code-specific statement,
    say that the retrieved evidence is insufficient.
 8. Do not output bare [STD-1]. Always use [[CITE:STD-1]].

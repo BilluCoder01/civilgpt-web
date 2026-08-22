@@ -45,6 +45,7 @@ type EngineeringDocument = {
 
 type StandardChunk = {
   id: number;
+  standard_document_id?: string; // ADDED: Required to link to the specific PDF
   content: string;
 
   page_number: number | null;
@@ -175,12 +176,20 @@ function buildStandardContext(
       const sourceId =
         `STD-${index + 1}`;
 
-      const citation =
+      const citationText =
         formatStandardCitation(source);
+
+      // UPDATED: Dynamically generate the viewer:// markdown link
+      const docId = source.standard_document_id || "";
+      const page = source.page_number || 1;
+      
+      const citationLink = docId 
+        ? `[Source: ${citationText}](viewer://${docId}/${page})` 
+        : `**Source: ${citationText}**`;
 
       citationMap.set(
         sourceId,
-        citation
+        citationLink
       );
 
       const role =
@@ -206,7 +215,7 @@ function buildStandardContext(
       return [
         `[${sourceId}]`,
         `SourceRole: ${role}`,
-        `VerifiedCitation: ${citation || "No verified citation metadata"}`,
+        `VerifiedCitation: ${citationText || "No verified citation metadata"}`,
         metaLines.join(" | "),
         "Content:",
         source.content.trim(),
@@ -300,9 +309,8 @@ function replaceCitationTokens(
       const citation =
         citationMap.get(sourceId);
 
-      return citation
-        ? `**Source: ${citation}**`
-        : "";
+      // UPDATED: Now directly inserting the fully formatted Markdown link
+      return citation ? citation : "";
     }
   );
 }

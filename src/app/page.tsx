@@ -59,17 +59,6 @@ const MessageBubble = memo(
     onCopy: (messageId: string, content: string) => void;
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
-    // Intercept "Source: ... Page X" text and transform it into a custom markdown link
-    // so ReactMarkdown can render it as a clickable viewer button.
-    const processedContent = useMemo(() => {
-      if (m.role !== 'assistant') return m.content;
-      return m.content.replace(/(?:\*\*?)?(Source:[^\n]*?Page\s+(\d+)[^\n]*)(?:\*\*?)?/gi, (match, p1, p2) => {
-        const cleanText = p1.replace(/\*/g, '').trim();
-        // Hardcoding the known IS 10262 doc ID for this frontend integration step
-        return `\n\n[${cleanText}](viewer://89ba6142-899d-408c-829b-f9634e2af7d2/${p2})\n\n`;
-      });
-    }, [m.content, m.role]);
-
     return (
       <div
         className={`group ${
@@ -141,9 +130,7 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-                  p: ({ node, ...props }) => (
-                    <p className="mb-4" {...props} />
-                  ),
+                  p: ({ node, ...props }) => <p className="mb-4" {...props} />,
                   ul: ({ node, ...props }) => (
                     <ul
                       className={`list-disc pl-5 mb-4 space-y-1.5 ${
@@ -210,57 +197,47 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-                  // Custom Link Component for Citations
+                  // Sleek Aesthetic Link Component for Citations
                   a: ({ node, href, children, ...props }) => {
                     if (href?.startsWith("viewer://")) {
                       const parts = href.replace("viewer://", "").split("/");
                       const docId = parts[0];
                       const page = parseInt(parts[1], 10) || 1;
-                      const citationText = String(children);
+                      const citationText = String(children).replace(/(View )?Source:\s*/i, '');
 
                       return (
-                        <span className="block mt-2 mb-2">
+                        <span className="inline-block mt-2 mb-1 mr-2 align-middle">
                           <button
                             type="button"
                             onClick={() =>
-                              onOpenViewer(
-                                docId,
-                                page,
-                                "IS Standard Document",
-                                citationText
-                              )
+                              onOpenViewer(docId, page, "Document Source", citationText)
                             }
-                            className={`group inline-flex items-center gap-2.5 px-4 py-2.5 rounded-[16px] text-[13px] font-semibold tracking-wide border transition-all duration-300 hover:shadow-md ${
+                            className={`group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-105 active:scale-95 ${
                               isDark
-                                ? "bg-[#1e1f20] border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-amber-400"
-                                : "bg-white border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-700 shadow-sm"
+                                ? "bg-[#1e1f20] border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-amber-400 shadow-sm"
+                                : "bg-white border-slate-200 hover:border-amber-300 text-slate-600 hover:text-amber-700 shadow-sm"
                             }`}
+                            title="View source document"
                           >
-                            <div
-                              className={`flex items-center justify-center w-6 h-6 rounded-md ${
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={2.5}
+                              stroke="currentColor"
+                              className={`w-3.5 h-3.5 ${
                                 isDark
-                                  ? "bg-[#333537] group-hover:bg-amber-500/20 text-slate-400 group-hover:text-amber-400"
-                                  : "bg-slate-100 group-hover:bg-amber-50 text-slate-500 group-hover:text-amber-600"
+                                  ? 'text-amber-500/70 group-hover:text-amber-400'
+                                  : 'text-amber-500 group-hover:text-amber-600'
                               }`}
                             >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={2}
-                                stroke="currentColor"
-                                className="w-3.5 h-3.5"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-                                />
-                              </svg>
-                            </div>
-                            <span className="truncate max-w-[220px] md:max-w-[400px]">
-                              {citationText.replace("Source:", "View Source:")}
-                            </span>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                              />
+                            </svg>
+                            <span className="truncate max-w-[200px]">{citationText}</span>
                           </button>
                         </span>
                       );
@@ -279,7 +256,7 @@ const MessageBubble = memo(
                   },
                 }}
               >
-                {processedContent}
+                {m.content}
               </ReactMarkdown>
             )}
           </div>

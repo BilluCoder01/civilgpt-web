@@ -2151,38 +2151,29 @@ export default function Chat() {
           </div>
         )}
 
-        {/* -------------------------------------------------- */}
-        {/* DYNAMIC VIEWER MODAL */}
-        {/* -------------------------------------------------- */}
-        {viewerState.isOpen && (
-          <StandardSourceViewer
-            isOpen={viewerState.isOpen}
-            onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
-            documentId={viewerState.documentId}
-            page={viewerState.page}
-            title={viewerState.title}
-            citation={viewerState.citation}
-            isDarkMode={isDarkMode}
-          />
-        )}
-
-
-        {/* -------------------------------------------------- */}
         {/* CALCULATOR */}
-        {/* -------------------------------------------------- */}
-
         {activeTab === "calculator" && (
           <MixDesignCalculator isDarkMode={isDarkMode} />
         )}
 
-        {/* -------------------------------------------------- */}
         {/* UNIT CONVERTER */}
-        {/* -------------------------------------------------- */}
-
         {activeTab === "converter" && (
           <UnitConverter isDark={isDarkMode} />
         )}
       </main>
+
+      {/* -------------------------------------------------- */}
+      {/* RIGHT SIDEBAR DYNAMIC VIEWER */}
+      {/* -------------------------------------------------- */}
+      <StandardSourceViewer
+        isOpen={viewerState.isOpen}
+        onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+        documentId={viewerState.documentId}
+        page={viewerState.page}
+        title={viewerState.title}
+        citation={viewerState.citation}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }

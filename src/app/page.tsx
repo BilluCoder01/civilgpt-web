@@ -44,8 +44,59 @@ type UploadStatus =
 
 type UploadType = "engineering" | "standard";
 
+type Confidence = "high" | "medium" | "low";
+
+interface ParsedCitation {
+  docId: string;
+  page: number;
+  score: number | null;
+}
+
 // ------------------------------------------------------------
-// MESSAGE BUBBLE & ROBUST CATCH-ALL REGEX INTERCEPTOR
+// ROBUST CITATION PARSING HELPERS (CLAUDE'S FIX)
+// ------------------------------------------------------------
+
+function parseCitationHref(href: string): ParsedCitation | null {
+  if (!href?.startsWith("#viewer/")) return null;
+
+  const raw = href
+    .replace(/^#viewer\//, "")
+    .replace(/[)\s]+$/, "")
+    .trim();
+
+  const match = raw.match(/^(.*)\/([^/]+)\/([^/]+)$/);
+  if (!match) return null;
+
+  const [, docId, pageStr, scoreStr] = match;
+  const page = Number.parseInt(pageStr, 10);
+
+  let score: number | null = null;
+  try {
+    const decoded = decodeURIComponent(scoreStr);
+    const parsed = Number.parseFloat(decoded);
+    if (!Number.isNaN(parsed)) {
+      score = Math.min(1, Math.max(0, parsed));
+    }
+  } catch {
+    score = null;
+  }
+
+  return {
+    docId: decodeURIComponent(docId),
+    page: Number.isNaN(page) ? 0 : page,
+    score,
+  };
+}
+
+function getConfidence(score: number | null): Confidence | "unknown" {
+  if (score === null) return "unknown";
+  if (score >= 0.78) return "high";
+  if (score >= 0.65) return "medium";
+  return "low";
+}
+
+// ------------------------------------------------------------
+// MESSAGE BUBBLE & INTERCEPTOR
 // ------------------------------------------------------------
 
 const FALLBACK_DOC_ID = "89ba6142-899d-408c-829b-f9634e2af7d2";
@@ -75,7 +126,7 @@ const MessageBubble = memo(
       text = text.replace(
         /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
         (_match, label, docId, page, score) => {
-          const finalScore = score || "0.70"; 
+          const finalScore = score || "0.75"; 
           return `[View Source: ${label.trim()}](#viewer/${docId}/${page}/${finalScore})`;
         }
       );
@@ -83,7 +134,7 @@ const MessageBubble = memo(
       text = text.replace(
         /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
         (_match, citationLabel, pageNumber) => {
-          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.70)`;
+          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.75)`;
         }
       );
 
@@ -224,79 +275,62 @@ const MessageBubble = memo(
                       {...props}
                     />
                   ),
-                  // Sleek Aesthetic Link Component with Recalibrated Confidence Tints
-                  // Sleek Aesthetic Link Component with Accurate Confidence Tints
+                  // Sleek Aesthetic Link Component with Robust Parsing & Confidence Tints
                   a: ({ node, href, children, ...props }) => {
-                    if (href?.startsWith("#viewer/")) {
-                      const parts = href.replace("#viewer/", "").split("/");
-                      const docId = parts[0] || FALLBACK_DOC_ID;
-                      const page = parseInt(parts[1], 10) || 1;
-                      
-                      // Safely parse the similarity score with a robust fallback
-                      let score = 0.75;
-                      if (parts.length > 2 && parts[2]) {
-                        const parsed = parseFloat(parts[2]);
-                        if (!isNaN(parsed)) {
-                          score = parsed;
-                        }
-                      }
+                    const parsed = parseCitationHref(href || "");
 
+                    if (parsed) {
+                      const { docId, page, score } = parsed;
+                      const confidence = getConfidence(score);
                       const citationText = String(children).replace(/(View )?Source:\s*/i, '');
 
-                      let pillStyling = isDark ? "bg-[#1e1f20] border-slate-700 text-slate-300" : "bg-white border-slate-200 text-slate-700 shadow-sm";
-                      let confidenceLabel = "Source Document";
+                      const CONFIDENCE_STYLES: Record<Confidence | "unknown", string> = {
+                        high: isDark 
+                          ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:border-emerald-500/50" 
+                          : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300 shadow-sm",
+                        medium: isDark 
+                          ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:border-amber-500/50" 
+                          : "bg-amber-50 border-amber-200 text-amber-800 hover:border-amber-300 shadow-sm",
+                        low: isDark 
+                          ? "bg-rose-950/40 border-rose-800/60 text-rose-300 hover:border-rose-500/50" 
+                          : "bg-rose-50 border-rose-200 text-rose-800 hover:border-rose-300 shadow-sm",
+                        unknown: isDark 
+                          ? "bg-[#1e1f20] border-slate-700 text-slate-400" 
+                          : "bg-slate-100 border-slate-300 text-slate-600 shadow-sm",
+                      };
 
-                      const percent = (score * 100).toFixed(1);
-                      if (score >= 0.78) {
-                        // Green / High Confidence
-                        pillStyling = isDark
-                          ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:border-emerald-500/50"
-                          : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300 shadow-sm";
-                        confidenceLabel = `🟢 High Confidence Match (${percent}%) — Verified Code Source`;
-                      } else if (score >= 0.65) {
-                        // Amber / Medium Confidence
-                        pillStyling = isDark
-                          ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:border-amber-500/50"
-                          : "bg-amber-50 border-amber-200 text-amber-800 hover:border-amber-300 shadow-sm";
-                        confidenceLabel = `🟠 Medium Confidence Match (${percent}%) — Cross-reference recommended`;
-                      } else {
-                        // Rose / Low Confidence (Red warning)
-                        pillStyling = isDark
-                          ? "bg-rose-950/40 border-rose-800/60 text-rose-300 hover:border-rose-500/50"
-                          : "bg-rose-50 border-rose-200 text-rose-800 hover:border-rose-300 shadow-sm";
-                        confidenceLabel = `🔴 Low Confidence Match (${percent}%) — Please double check manually`;
-                      }
+                      const CONFIDENCE_DOT: Record<Confidence | "unknown", string> = {
+                        high: "bg-emerald-500",
+                        medium: "bg-amber-500",
+                        low: "bg-rose-500",
+                        unknown: "bg-slate-400",
+                      };
+
+                      const tooltip = score !== null 
+                        ? `${confidence.toUpperCase()} Confidence Match — Similarity: ${(score * 100).toFixed(1)}%` 
+                        : "Score unavailable — verify source manually";
 
                       return (
                         <span className="inline-block mt-2 mb-1 mr-2 align-middle">
                           <button
                             type="button"
                             onClick={(e) => {
-                              e.preventDefault(); 
+                              e.preventDefault();
                               onOpenViewer(docId, page, "Document Source", citationText);
                             }}
-                            className={`group inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-[1.02] active:scale-95 ${pillStyling}`}
-                            title={confidenceLabel}
+                            className={`group inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-[12px] font-semibold tracking-wide border transition-all duration-300 hover:scale-[1.02] active:scale-95 ${CONFIDENCE_STYLES[confidence]}`}
+                            title={tooltip}
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={2.5}
-                              stroke="currentColor"
-                              className="w-3.5 h-3.5 shrink-0 opacity-80 group-hover:scale-110 transition-transform"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-                              />
-                            </svg>
-                            <span>{citationText}</span>
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${CONFIDENCE_DOT[confidence]}`} />
+                            <span className="truncate max-w-[220px]">{citationText}</span>
+                            {score !== null && (
+                              <span className="opacity-70 tabular-nums text-[10px]">{(score * 100).toFixed(0)}%</span>
+                            )}
                           </button>
                         </span>
                       );
                     }
+
                     return (
                       <a
                         href={href}

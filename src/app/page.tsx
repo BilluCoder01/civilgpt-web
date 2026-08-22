@@ -53,7 +53,7 @@ interface ParsedCitation {
 }
 
 // ------------------------------------------------------------
-// ROBUST RIGHT-TO-LEFT URL SEGMENT PARSER WITH DIAGNOSTICS
+// ROBUST RIGHT-TO-LEFT URL SEGMENT PARSER
 // ------------------------------------------------------------
 
 function parseCitationHref(href: string): ParsedCitation | null {
@@ -94,7 +94,7 @@ function getConfidence(score: number | null): Confidence | "unknown" {
 }
 
 // ------------------------------------------------------------
-// MESSAGE BUBBLE & INTERCEPTOR
+// MESSAGE BUBBLE & RESTORED PRE-PROCESSOR INTERCEPTOR
 // ------------------------------------------------------------
 
 const FALLBACK_DOC_ID = "89ba6142-899d-408c-829b-f9634e2af7d2";
@@ -116,9 +116,28 @@ const MessageBubble = memo(
     onOpenViewer: (docId: string, page: number, title: string, citation: string) => void;
   }) => {
     
+    // RESTORED: Pre-process content to guarantee backend citation formats become clickable links
     const processedContent = useMemo(() => {
       if (m.role !== "assistant") return m.content;
-      return m.content;
+
+      let text = m.content;
+      
+      text = text.replace(
+        /\[Source:\s*([^\]]+)\]\(#viewer\/([a-f0-9-]+)\/(\d+)(?:\/([\d.]+))?\)/gi,
+        (_match, label, docId, page, score) => {
+          const finalScore = score || "0.75"; 
+          return `[View Source: ${label.trim()}](#viewer/${docId}/${page}/${finalScore})`;
+        }
+      );
+
+      text = text.replace(
+        /\*\*Source:\s*(.+?)\s*—\s*Page\s+(\d+)\*\*/gi,
+        (_match, citationLabel, pageNumber) => {
+          return `[View Source: ${citationLabel.trim()} — Page ${pageNumber}](#viewer/${FALLBACK_DOC_ID}/${pageNumber}/0.75)`;
+        }
+      );
+
+      return text;
     }, [m.content, m.role]);
 
     return (
@@ -257,8 +276,6 @@ const MessageBubble = memo(
                   ),
                   // Sleek Aesthetic Link Component with Robust Parsing & Confidence Tints
                   a: ({ node, href, children, ...props }) => {
-                    console.log("RAW HREF RECEIVED BY REACT-MARKDOWN:", href);
-
                     const parsed = parseCitationHref(href || "");
 
                     if (parsed) {
